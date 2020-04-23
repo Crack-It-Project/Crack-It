@@ -1,0 +1,7 @@
+#Dockerfile of the crackit php instance
+#Based on php-fpm
+#
+
+FROM php:7-fpm
+
+RUN docker-php-ext-install pdo pdo_mysql

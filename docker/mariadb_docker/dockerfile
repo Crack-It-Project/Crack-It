@@ -4,4 +4,4 @@
 
 FROM mariadb
 
-COPY test.sql /docker-entrypoint-initdb.d/crack_it.sql
+COPY crack_it.sql /docker-entrypoint-initdb.d/crack_it.sql

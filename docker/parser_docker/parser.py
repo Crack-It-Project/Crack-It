@@ -102,7 +102,7 @@ channel.exchange_declare(exchange='urls', exchange_type='fanout')  #to get url t
 channel.exchange_declare(exchange='hashes', exchange_type='fanout') #to send all hashes to cracker instances
 
 #parse a given file and then extract all passwords and hashes found. Return a mutli-level dict
-def analyzeFile(fileDscrpt):
+def analyzeFile(fileDscrpt, srckey):
     print("Processing one file")
     #return dict structure
     results = {
@@ -144,6 +144,7 @@ def analyzeFile(fileDscrpt):
                 item=d.group(1).lstrip() #strip leading spaces if there were some after the semicolon
             else:
                 item=line # the whole line is kept in fulllist mode
+            item=item.rstrip('\r\n') #remove trailing newlines (works for any combinaisons, so it works for DOS, OSX and Unix line endings)
             print(item)
             hashType = hashID.identifyHash(item)  #try to identify a hash
             hashcatcount=0 #number of possible hash types identified
@@ -164,7 +165,7 @@ def analyzeFile(fileDscrpt):
 
             #if there are no match, it must me plain text            
             if hashcatcount == 0:                   #TODO: find a better way because we're going to have a lot of false positive.'
-                registerPassword(item)
+                registerPassword(item, srckey)
             else:
                 hashSummary["value"]=item
                 sendHash(hashSummary)
@@ -193,16 +194,20 @@ def callback(ch, method, properties, body):
     datafiles=parsers[params["m"]](params["v"])  #we select and execute the appropriate parser by name from the parser list. (the parser name is also in the packet)
     # we get a file descriptor we can pass to analyseFile, we get a dict which contains everything extracted from it
     for datafile in datafiles:
+        srckey=params["v"]
         if isinstance(datafile, str):
             file=open(datafile, "r", encoding="utf-8", errors="ignore")
+            srckey+=":"+os.path.basename(datafile)
         else:
             file=datafile
-        analyzeFile(file)
+        analyzeFile(file, srckey)
         file.close() #we close the file, VERY IMPORTANT
         if dbactioncount >=250:
+            print("COMMIT")
             mariadb_connection.commit() #send everything pending to the database   
             dbactioncount = 0
 
+    print("LAST COMMIT")
     mariadb_connection.commit()
     """
     if "passwords" in data:
@@ -226,16 +231,18 @@ def callback(ch, method, properties, body):
 
 
 
-def registerPassword(password):
+def registerPassword(password, srckey):
     global dbactioncount, cursor
     print("[Saving] Password: "+password)
-    sql = "INSERT INTO dict (password, seen) VALUES (%s, 0) ON DUPLICATE KEY UPDATE seen=seen+1"  #insert the password, and if it already exist, increment the "seen" counter
-    val = [password]
-    try:
-        cursor.execute(sql, val)
-        dbactioncount+=1
-    except mariadb.DataError:
-        print("[Saving] [Error]")
+    sql = "INSERT INTO dict (password) VALUES (%s) ON DUPLICATE KEY UPDATE seen=if((select count(*) from origin_dict WHERE srckey = %s) > 0, seen, seen+1);"  #insert the password, and if it already exist, increment the "seen" counter only it we didn't get it from the same source
+    sql2 = "INSERT INTO origin_dict(srckey, item) VALUES (%s, (select id from dict WHERE password = %s)) ON DUPLICATE KEY UPDATE srckey=srckey;"
+    
+    cursor.execute(sql, [password, srckey])
+    cursor.execute(sql2, [srckey, password])
+    dbactioncount+=1
+    print("Pending: ")
+    print(dbactioncount)
+   
 
 def sendHash(ihash):
     print("[Saving] Hash: "+ihash["value"])
