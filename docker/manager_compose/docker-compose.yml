@@ -11,6 +11,37 @@ services:
         build:
             context: ../crawler_docker
             dockerfile: dockerfile
+        restart: 
+            always
+
+    parser:
+        image: "parser_docker"
+        networks: 
+            - "messages"
+            - "database"
+        depends_on:
+            - db
+            - rabbitmq
+        build:
+            context: ../parser_docker
+            dockerfile: dockerfile
+        restart: 
+            always
+
+    # hacker:
+    #     image: "hacker_docker"
+    #     networks: 
+    #         - "messages"
+    #         - "database"
+    #     depends_on:
+    #         - db
+    #         - rabbitmq
+    #         - crawler_docker
+    #     build:
+    #         context: ../hacker_docker
+    #         dockerfile: dockerfile
+    #     restart: 
+    #         always
     db:
         image: "mariadb_docker"
         networks: 
@@ -25,10 +56,16 @@ services:
             MYSQL_PASSWORD: "pythonpython"
         volumes:
             - "../db:/var/lib/mysql"
+        restart: 
+            always
+
     rabbitmq:
         image: "rabbitmq"
         networks: 
             - "messages"
+        restart: 
+            always
+
     nginx:
         image: "nginx"
         ports:
@@ -40,6 +77,9 @@ services:
             - php
         networks: 
             - "web"
+        restart: 
+            always
+
     php:
         image: "php"
         build:
@@ -52,6 +92,9 @@ services:
         networks: 
             - "database"
             - "web"
+        restart: 
+            always
+            
 networks:
     messages:
     database:

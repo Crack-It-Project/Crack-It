@@ -202,10 +202,6 @@ def callback(ch, method, properties, body):
             file=datafile
         analyzeFile(file, srckey)
         file.close() #we close the file, VERY IMPORTANT
-        if dbactioncount >=250:
-            print("COMMIT")
-            mariadb_connection.commit() #send everything pending to the database   
-            dbactioncount = 0
 
     print("LAST COMMIT")
     mariadb_connection.commit()
@@ -229,19 +225,35 @@ def callback(ch, method, properties, body):
             channel.basic_publish(exchange='hashes', routing_key='', body=message)"""
     
 
-
+def commitIfNecessary():
+    global dbactioncount, mariadb_connection       
+    if dbactioncount >=4:
+        print("COMMIT")
+        mariadb_connection.commit() #send everything pending to the database   
+        dbactioncount = 0
 
 def registerPassword(password, srckey):
-    global dbactioncount, cursor
+    global dbactioncount, cursor, mariadb_connection
     print("[Saving] Password: "+password)
-    sql = "INSERT INTO dict (password) VALUES (%s) ON DUPLICATE KEY UPDATE seen=if((select count(*) from origin_dict WHERE srckey = %s) > 0, seen, seen+1);"  #insert the password, and if it already exist, increment the "seen" counter only it we didn't get it from the same source
+    sql = "INSERT INTO dict (password) VALUES (%s) ON DUPLICATE KEY UPDATE seen=if((select count(*) from origin_dict WHERE srckey = %s) IS NOT NULL, (select seen from dict WHERE password = %s), (select seen+1 from dict WHERE password = %s));"  #insert the password, and if it already exist, increment the "seen" counter only it we didn't get it from the same source
     sql2 = "INSERT INTO origin_dict(srckey, item) VALUES (%s, (select id from dict WHERE password = %s)) ON DUPLICATE KEY UPDATE srckey=srckey;"
     
-    cursor.execute(sql, [password, srckey])
-    cursor.execute(sql2, [srckey, password])
-    dbactioncount+=1
+    try:
+        cursor.execute(sql, (password, srckey, password, password))
+        mariadb_connection.commit()
+        cursor.execute(sql2, (srckey, password))
+
+        dbactioncount+=2
+        
+    except Exception as err:
+        print("[Saving] [Error] ")
+        print(err)
+
     print("Pending: ")
     print(dbactioncount)
+    commitIfNecessary()
+    if password == "0000":
+        exit()
    
 
 def sendHash(ihash):
