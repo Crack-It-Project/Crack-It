@@ -1,0 +1,15 @@
+#Dockerfile of the crackit crawler
+#Based on Python 3
+#
+
+FROM python:3
+
+WORKDIR /code
+
+COPY requirements.txt requirements.txt
+
+RUN pip install -r requirements.txt
+
+COPY crawler.py ./
+
+CMD ["python","crawler.py"]

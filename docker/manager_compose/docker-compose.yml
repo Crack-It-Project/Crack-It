@@ -1,0 +1,53 @@
+version: '3'
+services:
+    crawler:
+        image: "crawler_docker"
+        networks: 
+            - "messages"
+            - "database"
+        depends_on:
+            - db
+            - rabbitmq
+        build:
+            context: ../crawler_docker
+            dockerfile: dockerfile
+    db:
+        image: "mariadb_docker"
+        networks: 
+            - "database"
+        build:
+            context: ../mariadb_docker
+            dockerfile: dockerfile
+        environment:
+            MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+            MYSQL_DATABASE: "crack_it"
+            MYSQL_USER: "python"
+            MYSQL_PASSWORD: "pythonpython"
+    rabbitmq:
+        image: "rabbitmq"
+        networks: 
+            - "messages"
+    web-frontend:
+        image: "nginx"
+        volumes:
+            - webdata:/var/www/ui
+        networks: 
+            - "web"
+        depends_on:
+            - web-backend
+        expose:
+            - "80"
+            - "443"          
+    web-backend:
+        image: "php:fpm"
+        depends_on:
+            - db
+        networks: 
+            - "database"
+            - "web"
+networks:
+    messages:
+    database:
+    web:
+volumes:
+    webdata:

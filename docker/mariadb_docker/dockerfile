@@ -1,0 +1,7 @@
+#Dockerfile of the crackit db
+#Based on mariadb
+#
+
+FROM mariadb
+
+COPY test.sql /docker-entrypoint-initdb.d/crack_it.sql

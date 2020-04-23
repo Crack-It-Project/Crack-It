@@ -1,0 +1,6 @@
+requests
+mysqlclient
+pika
+hashid
+gitpython
+python-magic
