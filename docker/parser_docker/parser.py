@@ -11,6 +11,7 @@ from git import Repo
 import os
 #import shutil
 import magic
+import time
 
 hashID = hashid.HashID()
 
@@ -89,12 +90,27 @@ parsers = {
 #========================================================================
 #SETUP PHASE
 
-#connecting to rabbitMQ
-connection = pika.BlockingConnection(
-    pika.ConnectionParameters(host='rabbitmq'))
-channel = connection.channel()
-#connecting to mariadb
-mariadb_connection = mariadb.connect(host='db', user='python', password='pythonpython', database='crack_it')
+success=False
+while not success:
+    try:
+        #connecting to mariadb
+        mariadb_connection = mariadb.connect(host='db', user='python', password='pythonpython', database='crack_it')
+        success=True
+    except mariadb._exceptions.OperationalError as e:
+        success=False
+        print("Failed to connect to database... Retrying in 5 seconds.")
+        time.sleep(5)
+
+success=False
+while not success:
+    try:
+        connection = pika.BlockingConnection(pika.ConnectionParameters(host='rabbitmq'))
+        channel = connection.channel()
+        success=True
+    except (pika.exceptions.AMQPConnectionError) as e:
+        success=False
+        print("Failed to connect to rabbitMQ ... Retrying in 5 seconds.")
+        time.sleep(5)
 
 
 #create the exchanges if they do not exist already
@@ -177,7 +193,7 @@ def analyzeFile(fileDscrpt, srckey):
 cursor = mariadb_connection.cursor()
 
 #announce we have a queue because we are a data consumer
-result = channel.queue_declare(queue='', exclusive=True)
+result = channel.queue_declare(queue='parser_urls_queue')
 queue_name = result.method.queue
 
 #bind the queue to the url exchange
@@ -227,7 +243,7 @@ def callback(ch, method, properties, body):
 
 def commitIfNecessary():
     global dbactioncount, mariadb_connection       
-    if dbactioncount >=4:
+    if dbactioncount >=250:
         print("COMMIT")
         mariadb_connection.commit() #send everything pending to the database   
         dbactioncount = 0
@@ -235,12 +251,13 @@ def commitIfNecessary():
 def registerPassword(password, srckey):
     global dbactioncount, cursor, mariadb_connection
     print("[Saving] Password: "+password)
-    sql = "INSERT INTO dict (password) VALUES (%s) ON DUPLICATE KEY UPDATE seen=if((select count(*) from origin_dict WHERE srckey = %s) IS NOT NULL, (select seen from dict WHERE password = %s), (select seen+1 from dict WHERE password = %s));"  #insert the password, and if it already exist, increment the "seen" counter only it we didn't get it from the same source
-    sql2 = "INSERT INTO origin_dict(srckey, item) VALUES (%s, (select id from dict WHERE password = %s)) ON DUPLICATE KEY UPDATE srckey=srckey;"
+    #sql = "INSERT INTO dict (password) VALUES (%s) ON DUPLICATE KEY UPDATE seen = if(CAST((select count(*) from origin_dict WHERE origin_dict.srckey = %s) AS UNSIGNED) > 0, dict.seen, dict.seen+1);"  
+    sql="INSERT INTO dict (password) VALUES (%s) ON DUPLICATE KEY UPDATE seen = if((SELECT count(*) FROM (select * from origin_dict INNER JOIN dict ON dict.id = origin_dict.item WHERE origin_dict.srckey = %s AND dict.password = %s) s) > 0, dict.seen, dict.seen+1);" #insert the password, and if it already exist, increment the "seen" counter only it we didn't get it from the same source
+    sql2 = "INSERT INTO origin_dict(srckey, item) VALUES (%s, (select id from dict WHERE password = %s)) ON DUPLICATE KEY UPDATE srckey=srckey;" #remember from which source the entry is from, if this is the first time we see it.
     
     try:
-        cursor.execute(sql, (password, srckey, password, password))
-        mariadb_connection.commit()
+        cursor.execute(sql, (password, srckey, password))
+        #mariadb_connection.commit()
         cursor.execute(sql2, (srckey, password))
 
         dbactioncount+=2
@@ -252,8 +269,7 @@ def registerPassword(password, srckey):
     print("Pending: ")
     print(dbactioncount)
     commitIfNecessary()
-    if password == "0000":
-        exit()
+
    
 
 def sendHash(ihash):
@@ -262,7 +278,7 @@ def sendHash(ihash):
     #send the message through rabbbitMQ using the hashes exchange
     channel.basic_publish(exchange='hashes', routing_key='', body=message)
 
-channel.basic_consume(callback, queue_name, True) #registering processing function
+channel.basic_consume(queue_name, callback, True) #registering processing function
 
 channel.start_consuming() #start processing messages in the url queue
 

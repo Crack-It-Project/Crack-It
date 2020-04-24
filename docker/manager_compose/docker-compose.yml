@@ -11,14 +11,18 @@ services:
         build:
             context: ../crawler_docker
             dockerfile: dockerfile
-        restart: 
-            always
 
     parser:
         image: "parser_docker"
         networks: 
             - "messages"
             - "database"
+        deploy:
+            mode: replicated #use global to only have one instance per node
+            replicas: 1
+            placement:
+                constraints:
+                  - "node.role==worker"
         depends_on:
             - db
             - rabbitmq

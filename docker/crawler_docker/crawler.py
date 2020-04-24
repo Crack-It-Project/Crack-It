@@ -44,19 +44,35 @@ crawlers = {
 success=False
 while not success:
     try:
-        connection = pika.BlockingConnection(pika.ConnectionParameters(host='rabbitmq'))
-        channel = connection.channel()
         #connecting to mariadb
         mariadb_connection = mariadb.connect(host='db', user='python', password='pythonpython', database='crack_it')
         success=True
-    except (pika.exceptions.AMQPConnectionError, mariadb._exceptions.OperationalError) as e:
+    except mariadb._exceptions.OperationalError as e:
         success=False
-        print("Failed to connect to rabbitMQ or database... Retrying in 5 seconds.")
+        print("Failed to connect to database... Retrying in 5 seconds.")
+        time.sleep(5)
+
+success=False
+while not success:
+    try:
+        connection = pika.BlockingConnection(pika.ConnectionParameters(host='rabbitmq'))
+        channel = connection.channel()
+        success=True
+    except (pika.exceptions.AMQPConnectionError) as e:
+        success=False
+        print("Failed to connect to rabbitMQ ... Retrying in 5 seconds.")
         time.sleep(5)
 
 
 #create the exchange if it does not exist already
 channel.exchange_declare(exchange='urls', exchange_type='fanout')
+
+result = channel.queue_declare(queue='parser_urls_queue')
+queue_name = result.method.queue
+
+#bind the queue to the url exchange
+channel.queue_bind(exchange='urls', queue=queue_name)
+
 
 #========================================================================
 
