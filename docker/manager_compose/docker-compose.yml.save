@@ -1,0 +1,109 @@
+
+version: '3'
+services:
+    crawler:
+        image: "crawler_docker"
+        networks: 
+            - "messages"
+            - "database"
+        depends_on:
+            - db
+            - rabbitmq
+        build:
+            context: ../crawler_docker
+            dockerfile: dockerfile
+
+    parser:
+        image: "parser_docker"
+        networks: 
+            - "messages"
+            - "database"
+        deploy:
+            mode: replicated #use global to only have one instance per node
+            replicas: 1
+            placement:
+                constraints:
+                  - "node.role==worker"
+        depends_on:
+            - db
+            - rabbitmq
+        build:
+            context: ../parser_docker
+            dockerfile: dockerfile
+        restart: 
+            always
+
+    # hacker:
+    #     image: "hacker_docker"
+    #     networks: 
+    #         - "messages"
+    #         - "database"
+    #     depends_on:
+    #         - db
+    #         - rabbitmq
+    #         - crawler_docker
+    #     build:
+    #         context: ../hacker_docker
+    #         dockerfile: dockerfile
+    #     restart: 
+    #         always
+    db:
+        image: "mariadb_docker"
+        networks: 
+            - "database"
+        build:
+            context: ../mariadb_docker
+            dockerfile: dockerfile
+        environment:
+            MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+            MYSQL_DATABASE: "crack_it"
+            MYSQL_USER: "python"
+            MYSQL_PASSWORD: "pythonpython"
+        volumes:
+            - "../db:/var/lib/mysql"
+        restart: 
+            always
+
+    rabbitmq:
+        image: "rabbitmq"
+        networks: 
+            - "messages"
+        restart: 
+            always
+
+    nginx:
+        image: "nginx"
+        ports:
+            - "8080:80"
+        volumes:
+            - ../web:/code
+            - ../web_docker/nginx/site.conf:/etc/nginx/conf.d/default.conf
+        links:
+            - php
+        networks: 
+            - "web"
+        restart: 
+            always
+
+    php:
+        image: "php"
+        build:
+            context: ../web_docker/php
+            dockerfile: dockerfile
+        volumes:
+            - ../web:/code
+        depends_on:
+            - db
+        networks: 
+            - "database"
+            - "web"
+        restart: 
+            always
+            
+networks:
+    messages:
+    database:
+    web:
+volumes:
+    web:
+    db:
