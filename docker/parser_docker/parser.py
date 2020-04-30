@@ -203,7 +203,7 @@ dbactioncount=0
 
 #called fo each item in the queue
 def callback(ch, method, properties, body):
-    global dbactioncount, cursor, mariadb_connection
+    global dbactioncount, cursor, mariadb_connection, channel
     params=json.loads(body) #parse the json packet
     print("processing:")
     print(params["v"])
@@ -221,6 +221,7 @@ def callback(ch, method, properties, body):
 
     print("LAST COMMIT")
     mariadb_connection.commit()
+    channel.basic_ack(method.delivery_tag)
     """
     if "passwords" in data:
         for password in data["passwords"]: #if we have passwords, then for each one do            
@@ -278,7 +279,7 @@ def sendHash(ihash):
     #send the message through rabbbitMQ using the hashes exchange
     channel.basic_publish(exchange='hashes', routing_key='', body=message)
 
-channel.basic_consume(queue_name, callback, True) #registering processing function
+channel.basic_consume(queue_name, callback, auto_ack=False) #registering processing function
 
 channel.start_consuming() #start processing messages in the url queue
 
