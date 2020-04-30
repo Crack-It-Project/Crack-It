@@ -67,7 +67,7 @@ while not success:
 #create the exchange if it does not exist already
 channel.exchange_declare(exchange='urls', exchange_type='fanout')
 
-result = channel.queue_declare(queue='parser_urls_queue')
+result = channel.queue_declare(queue='parser_urls_queue', exclusive=False, auto_delete=False)
 queue_name = result.method.queue
 
 #bind the queue to the url exchange

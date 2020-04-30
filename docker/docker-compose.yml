@@ -59,7 +59,7 @@ services:
             MYSQL_USER: "python"
             MYSQL_PASSWORD: "pythonpython"
         volumes:
-            - "mariadb_docker/db:/var/lib/mysql"
+            - db:/var/lib/mysql"
         restart: 
             always
 
@@ -76,7 +76,7 @@ services:
             - "8080:80"
         volumes:
             - web:/code
-            - web_docker/nginx/site.conf:/etc/nginx/conf.d/default.conf
+            - ./web_docker/nginx:/etc/nginx/conf.d
         links:
             - php
         networks: 

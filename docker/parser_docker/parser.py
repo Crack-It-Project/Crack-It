@@ -106,6 +106,9 @@ while not success:
     try:
         connection = pika.BlockingConnection(pika.ConnectionParameters(host='rabbitmq'))
         channel = connection.channel()
+        channel_uplink = connection.channel()
+        channel.basic_qos(prefetch_count=1)
+        channel_uplink.basic_qos(prefetch_count=1)
         success=True
     except (pika.exceptions.AMQPConnectionError) as e:
         success=False
@@ -161,7 +164,7 @@ def analyzeFile(fileDscrpt, srckey):
             else:
                 item=line # the whole line is kept in fulllist mode
             item=item.rstrip('\r\n') #remove trailing newlines (works for any combinaisons, so it works for DOS, OSX and Unix line endings)
-            print(item)
+            #print(item)
             hashType = hashID.identifyHash(item)  #try to identify a hash
             hashcatcount=0 #number of possible hash types identified
             #hash data structure declaration, this is what is sent via rabbitMQ. This is stored in the return dict in an array of these
@@ -174,7 +177,7 @@ def analyzeFile(fileDscrpt, srckey):
             for mode in hashType:
                 if mode.hashcat is not None: #we only keep hashes hashcat can break, it should also filter out obscure hashes that got matched by a hash regex (by hashid)
                     print(mode.name)
-                    print(mode.hashcat)
+                    #print(mode.hashcat)
                     hashSummary["possibleHashTypes"].append(mode.hashcat)
                     hashSummary["possibleHashTypesNames"].append(mode.name)
                     hashcatcount+=1
@@ -193,11 +196,18 @@ def analyzeFile(fileDscrpt, srckey):
 cursor = mariadb_connection.cursor()
 
 #announce we have a queue because we are a data consumer
-result = channel.queue_declare(queue='parser_urls_queue')
-queue_name = result.method.queue
+queue_name = 'parser_urls_queue'
+result = channel.queue_declare(queue=queue_name, exclusive=False, auto_delete=False)
+
 
 #bind the queue to the url exchange
 channel.queue_bind(exchange='urls', queue=queue_name)
+
+queue_name2 = 'cracker_hashes_queue'
+result2 = channel.queue_declare(queue=queue_name2, exclusive=False, auto_delete=False)
+
+#bind the queue to the url exchange
+channel.queue_bind(exchange='hashes', queue=queue_name2)
 
 dbactioncount=0
 
@@ -221,7 +231,8 @@ def callback(ch, method, properties, body):
 
     print("LAST COMMIT")
     mariadb_connection.commit()
-    channel.basic_ack(method.delivery_tag)
+    print("ACK-ING the message")
+    ch.basic_ack(method.delivery_tag)
     """
     if "passwords" in data:
         for password in data["passwords"]: #if we have passwords, then for each one do            
@@ -244,14 +255,14 @@ def callback(ch, method, properties, body):
 
 def commitIfNecessary():
     global dbactioncount, mariadb_connection       
-    if dbactioncount >=250:
+    if dbactioncount >=1000:
         print("COMMIT")
         mariadb_connection.commit() #send everything pending to the database   
         dbactioncount = 0
 
 def registerPassword(password, srckey):
     global dbactioncount, cursor, mariadb_connection
-    print("[Saving] Password: "+password)
+    #print("[Saving] Password: "+password)
     #sql = "INSERT INTO dict (password) VALUES (%s) ON DUPLICATE KEY UPDATE seen = if(CAST((select count(*) from origin_dict WHERE origin_dict.srckey = %s) AS UNSIGNED) > 0, dict.seen, dict.seen+1);"  
     sql="INSERT INTO dict (password) VALUES (%s) ON DUPLICATE KEY UPDATE seen = if((SELECT count(*) FROM (select * from origin_dict INNER JOIN dict ON dict.id = origin_dict.item WHERE origin_dict.srckey = %s AND dict.password = %s) s) > 0, dict.seen, dict.seen+1);" #insert the password, and if it already exist, increment the "seen" counter only it we didn't get it from the same source
     sql2 = "INSERT INTO origin_dict(srckey, item) VALUES (%s, (select id from dict WHERE password = %s)) ON DUPLICATE KEY UPDATE srckey=srckey;" #remember from which source the entry is from, if this is the first time we see it.
@@ -264,20 +275,21 @@ def registerPassword(password, srckey):
         dbactioncount+=2
         
     except Exception as err:
-        print("[Saving] [Error] ")
+       # print("[Saving] [Error] ")
         print(err)
 
-    print("Pending: ")
-    print(dbactioncount)
+    #print("Pending: ")
+    #print(dbactioncount)
     commitIfNecessary()
 
    
 
 def sendHash(ihash):
+    global channel_uplink
     print("[Saving] Hash: "+ihash["value"])
     message=json.dumps(ihash) #serializing the dict to json
     #send the message through rabbbitMQ using the hashes exchange
-    channel.basic_publish(exchange='hashes', routing_key='', body=message)
+    channel_uplink.basic_publish(exchange='hashes', routing_key='', body=message)
 
 channel.basic_consume(queue_name, callback, auto_ack=False) #registering processing function
 
