@@ -70,7 +70,7 @@ if hash_presence_in_bdd == False:
 			print("Dictionnary has been updated ...")
 
 			# Hash password db insert
-			val_hash = [hash, hashType, password_clear]		# <-- Lien fait ici \o/
+			val_hash = [hash, hashType, val_clear]		# <-- Lien fait ici \o/
 			cursor.execute(insert_bdd_hash, val_hash)
 			mariadb_connection.commit()
 			print(cursor.rowcount, "Hashed password was inserted")
@@ -93,7 +93,7 @@ os.system("rm cracked.txt 2> /dev/null")
 # Insert hash in db if the script hasn't cracked it
 if success_token == False:
 	possibleHashTypes = str(rabbitMQ_data_array['possibleHashTypes'])
-	val_hash = [hash, possibleHashTypes, 'null']
+	val_hash = [hash, possibleHashTypes, None]
 	cursor.execute(insert_bdd_hash, val_hash)
 	mariadb_connection.commit()
 	print(cursor.rowcount, "Hash not decrypted was inserted in db")
