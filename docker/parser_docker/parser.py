@@ -12,18 +12,10 @@ import os
 #import shutil
 import magic
 import time
+from zxcvbn import zxcvbn
 
-hashID = hashid.HashID()
 
-mime = magic.Magic(mime=True)
-
-#idSemicolumnThenItem = regex.compile('[^:^\n]*:([^\n]+)')
-#idSemicolumnThenItem = regex.compile('\b(?!http|https|ftp|sftp|rtmp|ws)[^:^\n0-9]+:(?!\/\/)([^\n]+)') # make this regex way better here password starting with // won't work
-
-#This regular expression is sued to check passwords list in this format TextOrUser:Password  Whitespaces between the semicolon : are ignored.
-#We first compile it, which create an object we can sue to apply the regex, it is also faster than using the re. function directly
-#I had to split the negative look-behinds (?<!https) into multiple because python does not seems to support them together (eg : (?<!https|http))
-idSemicolumnThenItem = regex.compile('\b[^:^\n0-9]+(?<!http)(?<!https)(?<!ftp)(?<!sftp)(?<!rtmp)(?<!ws):([^\n]+)') #TODO: check this
+########################################## FUNCTONS ##########################################
 
 #Get the repo name from the URL (by trimming)
 def get_repo_name_from_url(url):
@@ -37,11 +29,9 @@ def get_repo_name_from_url(url):
 
     return url[last_slash_index + 1:last_suffix_index]
 
-
-#to check: https://github.com/iphelix/pack
 #========================================================================
-#MODULE DELCARATION AND CONFIGURATION SECTION
 
+#MODULE DELCARATION AND CONFIGURATION SECTION
 
 def parser_pastebin(url):
     
@@ -50,7 +40,6 @@ def parser_pastebin(url):
     tmp.write(requests.get(url).text)
     print("Compiled one pastebin file")
     return [tmp]
-
 
 def parser_github(url):
     
@@ -88,37 +77,6 @@ parsers = {
 }
 
 #========================================================================
-#SETUP PHASE
-
-success=False
-while not success:
-    try:
-        #connecting to mariadb
-        mariadb_connection = mariadb.connect(host='db', user='python', password='pythonpython', database='crack_it')
-        success=True
-    except mariadb._exceptions.OperationalError as e:
-        success=False
-        print("Failed to connect to database... Retrying in 5 seconds.")
-        time.sleep(5)
-
-success=False
-while not success:
-    try:
-        connection = pika.BlockingConnection(pika.ConnectionParameters(host='rabbitmq'))
-        channel = connection.channel()
-        channel_uplink = connection.channel()
-        channel.basic_qos(prefetch_count=1)
-        channel_uplink.basic_qos(prefetch_count=1)
-        success=True
-    except (pika.exceptions.AMQPConnectionError) as e:
-        success=False
-        print("Failed to connect to rabbitMQ ... Retrying in 5 seconds.")
-        time.sleep(5)
-
-
-#create the exchanges if they do not exist already
-channel.exchange_declare(exchange='urls', exchange_type='fanout')  #to get url to parse
-channel.exchange_declare(exchange='hashes', exchange_type='fanout') #to send all hashes to cracker instances
 
 #parse a given file and then extract all passwords and hashes found. Return a mutli-level dict
 def analyzeFile(fileDscrpt, srckey):
@@ -183,33 +141,23 @@ def analyzeFile(fileDscrpt, srckey):
                     hashcatcount+=1
 
             #if there are no match, it must me plain text            
-            if hashcatcount == 0:                   #TODO: find a better way because we're going to have a lot of false positive.'
-                registerPassword(item, srckey)
+            isPassword=False
+            if hashcatcount > 0:                   #TODO: find a better way because we're going to have a lot of false positive.'
+                results = zxcvbn(item)
+                if results['guesses_log10'] >= 11:
+                    hashSummary["value"]=item
+                    sendHash(hashSummary)
+                else:
+                    print("Skipping '"+item+"' because entropy seems to be too low.")
+                    isPassword=True
             else:
-                hashSummary["value"]=item
-                sendHash(hashSummary)
+                isPassword=True
+            if isPassword:
+                registerPassword(item, srckey)
+                
     print("done")
 
 #========================================================================
-
-#QUERY INIT
-cursor = mariadb_connection.cursor()
-
-#announce we have a queue because we are a data consumer
-queue_name = 'parser_urls_queue'
-result = channel.queue_declare(queue=queue_name, exclusive=False, auto_delete=False)
-
-
-#bind the queue to the url exchange
-channel.queue_bind(exchange='urls', queue=queue_name)
-
-queue_name2 = 'cracker_hashes_queue'
-result2 = channel.queue_declare(queue=queue_name2, exclusive=False, auto_delete=False)
-
-#bind the queue to the url exchange
-channel.queue_bind(exchange='hashes', queue=queue_name2)
-
-dbactioncount=0
 
 #called fo each item in the queue
 def callback(ch, method, properties, body):
@@ -252,6 +200,7 @@ def callback(ch, method, properties, body):
             #send the message through rabbbitMQ using the hashes exchange
             channel.basic_publish(exchange='hashes', routing_key='', body=message)"""
     
+#========================================================================
 
 def commitIfNecessary():
     global dbactioncount, mariadb_connection       
@@ -259,6 +208,8 @@ def commitIfNecessary():
         print("COMMIT")
         mariadb_connection.commit() #send everything pending to the database   
         dbactioncount = 0
+
+#========================================================================
 
 def registerPassword(password, srckey):
     global dbactioncount, cursor, mariadb_connection
@@ -275,14 +226,14 @@ def registerPassword(password, srckey):
         dbactioncount+=2
         
     except Exception as err:
-       # print("[Saving] [Error] ")
+        print("[Saving] [Error] ")
         print(err)
 
     #print("Pending: ")
     #print(dbactioncount)
     commitIfNecessary()
 
-   
+#========================================================================
 
 def sendHash(ihash):
     global channel_uplink
@@ -291,9 +242,99 @@ def sendHash(ihash):
     #send the message through rabbbitMQ using the hashes exchange
     channel_uplink.basic_publish(exchange='hashes', routing_key='', body=message)
 
+#========================================================================
+
+hashID = hashid.HashID()
+
+#========================================================================
+
+mime = magic.Magic(mime=True)
+
+#========================================================================
+#Setting up regular expressions
+
+#idSemicolumnThenItem = regex.compile('[^:^\n]*:([^\n]+)')
+#idSemicolumnThenItem = regex.compile('\b(?!http|https|ftp|sftp|rtmp|ws)[^:^\n0-9]+:(?!\/\/)([^\n]+)') # make this regex way better here password starting with // won't work
+
+#This regular expression is sued to check passwords list in this format TextOrUser:Password  Whitespaces between the semicolon : are ignored.
+#We first compile it, which create an object we can sue to apply the regex, it is also faster than using the re. function directly
+#I had to split the negative look-behinds (?<!https) into multiple because python does not seems to support them together (eg : (?<!https|http))
+idSemicolumnThenItem = regex.compile('\b[^:^\n0-9]+(?<!http)(?<!https)(?<!ftp)(?<!sftp)(?<!rtmp)(?<!ws):([^\n]+)') #TODO: check this
+
+
+########################################## END FUNCTONS #######################################
+
+
+#========================================================================
+#Connecting to mariadb
+success=False
+while not success:
+    try:
+        mariadb_connection = mariadb.connect(host='db', user='python', password='pythonpython', database='crack_it')
+        success=True
+    except mariadb._exceptions.OperationalError as e:
+        success=False
+        print("Failed to connect to database... Retrying in 5 seconds.")
+        time.sleep(5)
+
+#QUERY INIT
+cursor = mariadb_connection.cursor()
+
+
+#========================================================================
+#Connecting to RAbbiMQ
+success=False
+while not success:
+    try:
+        connection = pika.BlockingConnection(pika.ConnectionParameters(host='rabbitmq'))
+        channel = connection.channel()
+        channel_uplink = connection.channel()
+        channel.basic_qos(prefetch_count=1)
+        channel_uplink.basic_qos(prefetch_count=1)
+        success=True
+    except (pika.exceptions.AMQPConnectionError) as e:
+        success=False
+        print("Failed to connect to rabbitMQ ... Retrying in 5 seconds.")
+        time.sleep(5)
+
+
+#========================================================================
+#Setting up queues
+
+#Create the exchanges if they do not exist already
+channel.exchange_declare(exchange='urls', exchange_type='fanout')  #to get url to parse
+channel.exchange_declare(exchange='hashes', exchange_type='fanout') #to send all hashes to cracker instances
+
+#announce we have a queue because we are a data consumer
+queue_name = 'parser_urls_queue'
+result = channel.queue_declare(queue=queue_name, exclusive=False, auto_delete=False)
+#bind the queue to the url exchange
+channel.queue_bind(exchange='urls', queue=queue_name)
+
+
+queue_name2 = 'cracker_hashes_queue'
+result2 = channel.queue_declare(queue=queue_name2, exclusive=False, auto_delete=False)
+#bind the queue to the url exchange
+channel.queue_bind(exchange='hashes', queue=queue_name2)
+
+#========================================================================
+
+#Global variable useb in multiple functions - DO NOT TOUCH
+#Count actions on db before commiting
+dbactioncount=0
+
+#========================================================================
+
+
+######################################### START #########################################
+
+
 channel.basic_consume(queue_name, callback, auto_ack=False) #registering processing function
 
 channel.start_consuming() #start processing messages in the url queue
 
+
+
+#========================================================================
 #closing connection to rabbitMQ, important 
 connection.close()

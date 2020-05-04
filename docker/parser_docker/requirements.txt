@@ -4,3 +4,4 @@ pika
 hashid
 gitpython
 python-magic
+zxcvbn
