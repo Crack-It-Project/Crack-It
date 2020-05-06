@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Client :  localhost:3306
--- Généré le :  Jeu 23 Avril 2020 à 14:04
+-- Généré le :  Lun 04 Mai 2020 à 16:43
 -- Version du serveur :  10.3.22-MariaDB-0+deb10u1
 -- Version de PHP :  7.3.14-1~deb10u1
 
@@ -65,16 +65,17 @@ CREATE TABLE `source` (
   `idsource` bigint(20) UNSIGNED NOT NULL,
   `url` tinytext DEFAULT NULL,
   `module` varchar(45) DEFAULT NULL,
-  `name` tinytext DEFAULT NULL
+  `name` tinytext DEFAULT NULL,
+  `sourceHint` varchar(255) DEFAULT NULL COMMENT 'Used by the modules to know when was the last time this soruce was checked (could be date but also hash etc...)'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 --
 -- Contenu de la table `source`
 --
 
-INSERT INTO `source` (`idsource`, `url`, `module`, `name`) VALUES
-(1, 'https://scrape.pastebin.com/api_scraping.php?lang=email', 'pastebin', NULL),
-(2, 'https://github.com/danielmiessler/SecLists.git', 'git', NULL);
+INSERT INTO `source` (`idsource`, `url`, `module`, `name`, `sourceHint`) VALUES
+(3, 'https://scrape.pastebin.com/api_scraping.php?lang=email', 'pastebin', NULL, NULL),
+(4, 'https://scrape.pastebin.com/api_scraping.php?lang=bash', 'pastebin', NULL, NULL);
 
 --
 -- Index pour les tables exportées
@@ -122,7 +123,7 @@ ALTER TABLE `dict`
 -- AUTO_INCREMENT pour la table `source`
 --
 ALTER TABLE `source`
-  MODIFY `idsource` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `idsource` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 --
 -- Contraintes pour les tables exportées
 --

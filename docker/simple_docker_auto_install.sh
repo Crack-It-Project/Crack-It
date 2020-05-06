@@ -89,6 +89,7 @@ rm -rf /tmp/crack_it
 #Run docker container every hour
 #       Use "docker start" to execute an already ran container
 (crontab -l 2> /dev/null ; echo "* 0-23 * * * /usr/bin/docker start -d crack_it_crawler_1" ) | crontab
+(crontab -l 2> /dev/null ; echo " * 0 * * * /usr/bin/docker start -d crack_it_compiler_1" ) | crontab
 
 #Launch project
 cd /crack_it/manager_compose/

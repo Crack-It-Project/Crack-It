@@ -6,7 +6,7 @@ services:
             - "messages"
             - "database"
         depends_on:
-            - db
+            - db_dict
             - rabbitmq
         build:
             context: crawler_docker
@@ -19,34 +19,63 @@ services:
             - "database"
         deploy:
             mode: replicated #use global to only have one instance per node
-            replicas: 1
+            replicas: 2
             placement:
                 constraints:
                   - "node.role==worker"
         depends_on:
-            - db
+            - db_dict
             - rabbitmq
         build:
             context: parser_docker
             dockerfile: dockerfile
         restart: 
             always
-
-    # hacker:
-    #     image: "hacker_docker"
-    #     networks: 
+            
+    # parser2:
+    #     image: "parser_docker"
+    #     networks:
     #         - "messages"
     #         - "database"
     #     depends_on:
-    #         - db
+    #         - db_dict
     #         - rabbitmq
-    #         - crawler_docker
     #     build:
-    #         context: ../hacker_docker
+    #         context: parser_docker
     #         dockerfile: dockerfile
-    #     restart: 
+    #     restart:
     #         always
-    db:
+
+    hacker:
+        image: "hacker_docker"
+        networks: 
+            - "messages"
+            - "database"
+        depends_on:
+            - db_dict
+            - rabbitmq
+            - crawler
+        volumes:
+            - dict:/dict
+        build:
+            context: hacker_docker
+            dockerfile: dockerfile
+        restart: 
+            always
+    
+    compiler:
+        image: "compiler_docker"
+        networks:
+           - "database"
+        depends_on:
+           - db_dict
+        volumes:
+            - dict:/dict
+        build:
+           context: compiler_docker
+           dockerfile: dockerfile   
+
+    db_dict:
         image: "mariadb_docker"
         networks: 
             - "database"
@@ -59,7 +88,24 @@ services:
             MYSQL_USER: "python"
             MYSQL_PASSWORD: "pythonpython"
         volumes:
-            - db:/var/lib/mysql"
+            - db_dict:/var/lib/mysql"
+        restart: 
+            always
+
+    db_web:
+        image: "mariadb_docker"
+        networks: 
+            - "database"
+        build:
+            context: mariadb_docker
+            dockerfile: dockerfile
+        environment:
+            MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+            MYSQL_DATABASE: "crackit"
+            MYSQL_USER: "databaseweb"
+            MYSQL_PASSWORD: "databaseweb_passwd"
+        volumes:
+            - db_web:/var/lib/mysql"
         restart: 
             always
 
@@ -75,7 +121,7 @@ services:
         ports:
             - "8080:80"
         volumes:
-            - web:/code
+            - ./web:/var/www/html
             - ./web_docker/nginx:/etc/nginx/conf.d
         links:
             - php
@@ -90,9 +136,10 @@ services:
             context: web_docker/php
             dockerfile: dockerfile
         volumes:
-            - web:/code
+            - ./web:/var/www/html
         depends_on:
-            - db
+            - db_dict
+            - db_web
         networks: 
             - "database"
             - "web"
@@ -105,4 +152,6 @@ networks:
     web:
 volumes:
     web:
-    db:
+    db_dict:
+    db_web:
+    dict:

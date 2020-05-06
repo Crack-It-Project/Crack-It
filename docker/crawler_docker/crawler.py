@@ -8,25 +8,36 @@ import time
 #========================================================================
 #MODULE DELCARATION AND CONFIGURATION SECTION
 
-def crawler_pastebin(url):
+def crawler_pastebin(url, sourcehint):
     #fetch url and parse json
     scraping = requests.get(url).json()
     returns = []
+    if sourcehint is None:
+        sourcehint="-1" 
+    newsourcehint="-1"
     #get the scrape_url for each item returned by the API
     for item in scraping:
-        returns.append(item.get('scrape_url'))
-    return returns
+        date=item.get('date')
+        if int(date) > int(sourcehint):
+            if int(date) > int(newsourcehint):
+                newsourcehint=date
+            returns.append(item.get('scrape_url'))
+        else:
+            print("skipping already seen paste")
+    return returns, newsourcehint
 
-def crawler_github(url):
+def crawler_github(url, sourcehint):
     returns = []
     data_json = requests.get(url).json()
     for item in data_json["items"]:
         returns.append(item["html_url"])
-    return returns
+    sourcehint=None
+    return returns, sourcehint
 
-def crawler_git(url):
+def crawler_git(url, sourcehint):
     returns = [url]
-    return returns
+    sourcehint = None
+    return returns, sourcehint
 
 #add your crawler in this dict to register it, the key is the one the DB should use
 crawlers = {
@@ -45,7 +56,7 @@ success=False
 while not success:
     try:
         #connecting to mariadb
-        mariadb_connection = mariadb.connect(host='db', user='python', password='pythonpython', database='crack_it')
+        mariadb_connection = mariadb.connect(host='db_dict', user='python', password='pythonpython', database='crack_it')
         success=True
     except mariadb._exceptions.OperationalError as e:
         success=False
@@ -88,7 +99,9 @@ result = cursor.fetchall()
 for row in result:
     #We call the module the row is aksing for (value: row[2]) in the crawler dict, which is a registry of all modules. We then pass it the url from the DB row 
     #the result is an array of urls
-    result=crawlers[row[2]](row[1])
+    result, newsourcehint =crawlers[row[2]](row[1], row[4])
+    cursor.execute("UPDATE source SET sourceHint = %s WHERE idsource = %s;", (newsourcehint, row[0]))
+    mariadb_connection.commit() # w ecoult batch commit, but is it really worth it here ?
     for value in result:
         #assemble a json message to easely combine the two values, m=> module to use, v => url
         message=json.dumps({"m": row[2], "v": value})

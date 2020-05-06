@@ -78,9 +78,11 @@ parsers = {
 
 #========================================================================
 
-#parse a given file and then extract all passwords and hashes found. Return a mutli-level dict
+#Main function
+#Parses a given file and then extracts all passwords and hashes founded. Return a mutli-level dict
 def analyzeFile(fileDscrpt, srckey):
     print("Processing one file")
+
     #return dict structure
     results = {
         "hashes": [],
@@ -97,13 +99,15 @@ def analyzeFile(fileDscrpt, srckey):
     fileDscrpt.seek(0)
     linesizeavg /= lines
 
-    method="" #depending on the previous result, we choose a full passwordlist parsing emthod or a user:password parsing regex
+    method="" #depending on the previous result, we choose a full passwordlist parsing method or a user:password parsing regex
     if os.fstat(fileDscrpt.fileno()).st_size > 20000000 and linesizeavg < 32:
         method="fulllist"
     else:
         method="semicolonlist"
     lines=0 #we now use this to check for how many lines are not matched by the regex
+
     print("Method: ["+method+"]")
+
     for line in fileDscrpt:  #we parse line by line
         
         if method == "semicolonlist":
@@ -113,12 +117,12 @@ def analyzeFile(fileDscrpt, srckey):
             if lines > matches + 20:   #number of missed matches to consider the file invalid
                 print("Too many lines are not matching, stopping !")
                 return []
-                break;
+                break
 
         if method == "fulllist" or d: #if the regex match or we are in fulllist mode (= each line is a "string of interest")
             matches += 1 
             if method == "semicolonlist":
-                item=d.group(1).lstrip() #strip leading spaces if there were some after the semicolon
+                item=d.group(2).lstrip() #strip leading spaces if there were some after the semicolon
             else:
                 item=line # the whole line is kept in fulllist mode
             item=item.rstrip('\r\n') #remove trailing newlines (works for any combinaisons, so it works for DOS, OSX and Unix line endings)
@@ -163,6 +167,7 @@ def analyzeFile(fileDscrpt, srckey):
 def callback(ch, method, properties, body):
     global dbactioncount, cursor, mariadb_connection, channel
     params=json.loads(body) #parse the json packet
+    print(" ") #For log clarity 
     print("processing:")
     print(params["v"])
     datafiles=parsers[params["m"]](params["v"])  #we select and execute the appropriate parser by name from the parser list. (the parser name is also in the packet)
@@ -213,7 +218,7 @@ def commitIfNecessary():
 
 def registerPassword(password, srckey):
     global dbactioncount, cursor, mariadb_connection
-    #print("[Saving] Password: "+password)
+    print("[Saving] Password: "+password)
     #sql = "INSERT INTO dict (password) VALUES (%s) ON DUPLICATE KEY UPDATE seen = if(CAST((select count(*) from origin_dict WHERE origin_dict.srckey = %s) AS UNSIGNED) > 0, dict.seen, dict.seen+1);"  
     sql="INSERT INTO dict (password) VALUES (%s) ON DUPLICATE KEY UPDATE seen = if((SELECT count(*) FROM (select * from origin_dict INNER JOIN dict ON dict.id = origin_dict.item WHERE origin_dict.srckey = %s AND dict.password = %s) s) > 0, dict.seen, dict.seen+1);" #insert the password, and if it already exist, increment the "seen" counter only it we didn't get it from the same source
     sql2 = "INSERT INTO origin_dict(srckey, item) VALUES (%s, (select id from dict WHERE password = %s)) ON DUPLICATE KEY UPDATE srckey=srckey;" #remember from which source the entry is from, if this is the first time we see it.
@@ -259,7 +264,7 @@ mime = magic.Magic(mime=True)
 #This regular expression is sued to check passwords list in this format TextOrUser:Password  Whitespaces between the semicolon : are ignored.
 #We first compile it, which create an object we can sue to apply the regex, it is also faster than using the re. function directly
 #I had to split the negative look-behinds (?<!https) into multiple because python does not seems to support them together (eg : (?<!https|http))
-idSemicolumnThenItem = regex.compile('\b[^:^\n0-9]+(?<!http)(?<!https)(?<!ftp)(?<!sftp)(?<!rtmp)(?<!ws):([^\n]+)') #TODO: check this
+idSemicolumnThenItem = regex.compile('\b[^:^\s\n0-9]+(?<!http)(?<!https)(?<!ftp)(?<!sftp)(?<!rtmp)(?<!ws)(=|:)([^\s\n]+)') #TODO: check this
 
 
 ########################################## END FUNCTONS #######################################
@@ -270,7 +275,7 @@ idSemicolumnThenItem = regex.compile('\b[^:^\n0-9]+(?<!http)(?<!https)(?<!ftp)(?
 success=False
 while not success:
     try:
-        mariadb_connection = mariadb.connect(host='db', user='python', password='pythonpython', database='crack_it')
+        mariadb_connection = mariadb.connect(host='db_dict', user='python', password='pythonpython', database='crack_it')
         success=True
     except mariadb._exceptions.OperationalError as e:
         success=False
@@ -282,7 +287,7 @@ cursor = mariadb_connection.cursor()
 
 
 #========================================================================
-#Connecting to RAbbiMQ
+#Connecting to RabbitMQ
 success=False
 while not success:
     try:
