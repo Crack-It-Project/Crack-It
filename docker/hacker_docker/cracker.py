@@ -134,7 +134,7 @@ def callback(ch, method, properties, body):
 		print("Hash not decrypted")
 
 
-channel.basic_consume(queue_name, callback, auto_ack=False) #registering processing function
+channel.basic_consume(queue_name2, callback, auto_ack=False) #registering processing function
 
 channel.start_consuming() #start processing messages in the url queue
 

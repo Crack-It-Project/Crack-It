@@ -242,10 +242,10 @@ def registerPassword(password, srckey):
 
 def sendHash(ihash):
     global dbactioncount, cursor, mariadb_connection
-    insert_bdd_hash = "INSERT INTO hash (str, algo, clear) VALUES (%s, %s, %s)"
+    insert_bdd_hash = "INSERT INTO hash (str, algo, clear) VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE str=str;"
 
     print("[Saving] Hash: "+ihash["value"])
-    cursor.execute(insert_bdd_hash, (ihash["value"], json.dump(ihash["possibleHashTypes"]), None))
+    cursor.execute(insert_bdd_hash, (ihash["value"], json.dumps(ihash["possibleHashTypes"]), None))
     dbactioncount+=1
     commitIfNecessary()
     #message=json.dumps(ihash) #serializing the dict to json
