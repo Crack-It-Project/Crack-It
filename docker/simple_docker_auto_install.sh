@@ -92,7 +92,7 @@ rm -rf /tmp/crack_it
 (crontab -l 2> /dev/null ; echo " * 0 * * * /usr/bin/docker start -d crack_it_compiler_1" ) | crontab
 
 #Launch project
-cd /crack_it/manager_compose/
+cd /crack_it/
 docker-compose up --detach --build
 
 

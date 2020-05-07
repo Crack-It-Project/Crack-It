@@ -3,6 +3,7 @@ import requests
 import MySQLdb as mariadb
 import pika
 import sys
+import os
 import json
 import time
 #========================================================================
@@ -56,7 +57,7 @@ success=False
 while not success:
     try:
         #connecting to mariadb
-        mariadb_connection = mariadb.connect(host='db_dict', user='python', password='pythonpython', database='crack_it')
+        mariadb_connection = mariadb.connect(host='db_dict', user=os.environ['MYSQL_USER'], password=os.environ['MYSQL_PASSWORD'], database='crack_it')
         success=True
     except mariadb._exceptions.OperationalError as e:
         success=False

@@ -3,6 +3,7 @@ import requests
 import MySQLdb as mariadb
 import pika
 import sys
+import os
 import json
 import time
 
@@ -16,7 +17,7 @@ success=False
 while not success:
     try:
         #connecting to mariadb
-        mariadb_connection = mariadb.connect(host='db', user='python', password='pythonpython', database='crack_it')
+        mariadb_connection = mariadb.connect(host='db_dict', user=os.environ['MYSQL_USER'], password=os.environ['MYSQL_PASSWORD'], database='crack_it')
         success=True
     except mariadb._exceptions.OperationalError as e:
         success=False
@@ -50,7 +51,7 @@ channel.queue_bind(exchange='hashes', queue=queue_name)
 #QUERY INIT
 cursor = mariadb_connection.cursor()
 _SQL = (""" 
-        SELECT * FROM hash
+        SELECT * FROM hash WHERE clear IS NULL;
         """)
 #QUERY EXECUTE
 cursor.execute(_SQL)
@@ -58,7 +59,7 @@ result = cursor.fetchall()
 
 for row in result:
 
-    message=json.dumps({"m": row[2], "v": value})
+    message=json.dumps({"value": row["str"], "possibleHashTypes": json.loads(row["algo"])})
     #send the message through rabbbitMQ using the urls exchange
     channel.basic_publish(exchange='hashes', routing_key='', body=message)
 

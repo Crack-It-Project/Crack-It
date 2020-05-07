@@ -8,6 +8,8 @@ services:
         depends_on:
             - db_dict
             - rabbitmq
+        env_file:
+          - ./back.env
         build:
             context: crawler_docker
             dockerfile: dockerfile
@@ -26,25 +28,13 @@ services:
         depends_on:
             - db_dict
             - rabbitmq
+        env_file:
+          - ./back.env
         build:
             context: parser_docker
             dockerfile: dockerfile
         restart: 
             always
-            
-    # parser2:
-    #     image: "parser_docker"
-    #     networks:
-    #         - "messages"
-    #         - "database"
-    #     depends_on:
-    #         - db_dict
-    #         - rabbitmq
-    #     build:
-    #         context: parser_docker
-    #         dockerfile: dockerfile
-    #     restart:
-    #         always
 
     hacker:
         image: "hacker_docker"
@@ -55,8 +45,10 @@ services:
             - db_dict
             - rabbitmq
             - crawler
+        env_file:
+          - ./back.env
         volumes:
-            - dict:/dict
+            - ./volumes/dict:/dict
         build:
             context: hacker_docker
             dockerfile: dockerfile
@@ -69,43 +61,28 @@ services:
            - "database"
         depends_on:
            - db_dict
+        env_file:
+          - ./back.env
         volumes:
-            - dict:/dict
+            - ./volumes/dict:/dict
         build:
            context: compiler_docker
            dockerfile: dockerfile   
 
     db_dict:
-        image: "mariadb_docker"
+        image: "db_dict_docker"
         networks: 
             - "database"
         build:
-            context: mariadb_docker
+            context: db_dict_docker
             dockerfile: dockerfile
+        env_file:
+          - ./back.env
         environment:
             MYSQL_RANDOM_ROOT_PASSWORD: "yes"
             MYSQL_DATABASE: "crack_it"
-            MYSQL_USER: "python"
-            MYSQL_PASSWORD: "pythonpython"
         volumes:
-            - db_dict:/var/lib/mysql"
-        restart: 
-            always
-
-    db_web:
-        image: "mariadb_docker"
-        networks: 
-            - "database"
-        build:
-            context: mariadb_docker
-            dockerfile: dockerfile
-        environment:
-            MYSQL_RANDOM_ROOT_PASSWORD: "yes"
-            MYSQL_DATABASE: "crackit"
-            MYSQL_USER: "databaseweb"
-            MYSQL_PASSWORD: "databaseweb_passwd"
-        volumes:
-            - db_web:/var/lib/mysql"
+            - ./volumes/db_dict:/var/lib/mysql"
         restart: 
             always
 
@@ -121,8 +98,8 @@ services:
         ports:
             - "8080:80"
         volumes:
-            - ./web:/var/www/html
-            - ./web_docker/nginx:/etc/nginx/conf.d
+            - ./volumes/web:/var/www/html
+            - ./nginx_docker:/etc/nginx/conf.d #Exception ! Allow us to avoid another dockerfile
         links:
             - php
         networks: 
@@ -133,10 +110,10 @@ services:
     php:
         image: "php"
         build:
-            context: web_docker/php
+            context: php_docker
             dockerfile: dockerfile
         volumes:
-            - ./web:/var/www/html
+            - ./volumes/web:/var/www/html
         depends_on:
             - db_dict
             - db_web
@@ -145,11 +122,29 @@ services:
             - "web"
         restart: 
             always
+
+    db_web:
+        image: "db_web_docker"
+        networks: 
+            - "database"
+        build:
+            context: db_web_docker
+            dockerfile: dockerfile
+        environment:
+            MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+            MYSQL_DATABASE: "web"
+            MYSQL_USER: "databaseweb"
+            MYSQL_PASSWORD: "databaseweb_passwd"
+        volumes:
+            - ./volumes/db_web:/var/lib/mysql"
+        restart: 
+            always
             
 networks:
     messages:
     database:
     web:
+
 volumes:
     web:
     db_dict:

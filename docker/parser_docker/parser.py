@@ -241,11 +241,16 @@ def registerPassword(password, srckey):
 #========================================================================
 
 def sendHash(ihash):
-    global channel_uplink
+    global dbactioncount, cursor, mariadb_connection
+    insert_bdd_hash = "INSERT INTO hash (str, algo, clear) VALUES (%s, %s, %s)"
+
     print("[Saving] Hash: "+ihash["value"])
-    message=json.dumps(ihash) #serializing the dict to json
+    cursor.execute(insert_bdd_hash, (ihash["value"], json.dump(ihash["possibleHashTypes"]), None))
+    dbactioncount+=1
+    commitIfNecessary()
+    #message=json.dumps(ihash) #serializing the dict to json
     #send the message through rabbbitMQ using the hashes exchange
-    channel_uplink.basic_publish(exchange='hashes', routing_key='', body=message)
+    #channel_uplink.basic_publish(exchange='hashes', routing_key='', body=message)
 
 #========================================================================
 
@@ -275,7 +280,7 @@ idSemicolumnThenItem = regex.compile('\b[^:^\s\n0-9]+(?<!http)(?<!https)(?<!ftp)
 success=False
 while not success:
     try:
-        mariadb_connection = mariadb.connect(host='db_dict', user='python', password='pythonpython', database='crack_it')
+        mariadb_connection = mariadb.connect(host='db_dict', user=os.environ['MYSQL_USER'], password=os.environ['MYSQL_PASSWORD'], database='crack_it')
         success=True
     except mariadb._exceptions.OperationalError as e:
         success=False
@@ -293,9 +298,9 @@ while not success:
     try:
         connection = pika.BlockingConnection(pika.ConnectionParameters(host='rabbitmq'))
         channel = connection.channel()
-        channel_uplink = connection.channel()
+        #channel_uplink = connection.channel()
         channel.basic_qos(prefetch_count=1)
-        channel_uplink.basic_qos(prefetch_count=1)
+        #channel_uplink.basic_qos(prefetch_count=1)
         success=True
     except (pika.exceptions.AMQPConnectionError) as e:
         success=False
@@ -308,7 +313,7 @@ while not success:
 
 #Create the exchanges if they do not exist already
 channel.exchange_declare(exchange='urls', exchange_type='fanout')  #to get url to parse
-channel.exchange_declare(exchange='hashes', exchange_type='fanout') #to send all hashes to cracker instances
+#channel.exchange_declare(exchange='hashes', exchange_type='fanout') #to send all hashes to cracker instances
 
 #announce we have a queue because we are a data consumer
 queue_name = 'parser_urls_queue'
@@ -317,10 +322,10 @@ result = channel.queue_declare(queue=queue_name, exclusive=False, auto_delete=Fa
 channel.queue_bind(exchange='urls', queue=queue_name)
 
 
-queue_name2 = 'cracker_hashes_queue'
-result2 = channel.queue_declare(queue=queue_name2, exclusive=False, auto_delete=False)
+#queue_name2 = 'cracker_hashes_queue'
+#result2 = channel.queue_declare(queue=queue_name2, exclusive=False, auto_delete=False)
 #bind the queue to the url exchange
-channel.queue_bind(exchange='hashes', queue=queue_name2)
+#channel.queue_bind(exchange='hashes', queue=queue_name2)
 
 #========================================================================
 

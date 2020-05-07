@@ -16,7 +16,7 @@ import time
 success=False
 while not success:
     try:
-        mariadb_connection = mariadb.connect(host='db', user='python', password='pythonpython', database='crack_it')
+        mariadb_connection = mariadb.connect(host='db_dict', user=os.environ['MYSQL_USER'], password=os.environ['MYSQL_PASSWORD'], database='crack_it')
         success=True
     except mariadb._exceptions.OperationalError as e:
         success=False
@@ -52,7 +52,7 @@ channel.queue_bind(exchange='hashes', queue=queue_name2)
 def callback(ch, method, properties, body):
 	# Prepare requests
 	check_bdd = "SELECT str FROM hash WHERE str = %s"
-	insert_bdd_hash = "INSERT INTO hash (str, algo, clear) VALUES (%s, %s, %s)"
+	update_bdd_hash = "UPDATE hash SET clear = %s WHERE str = %s"
 	insert_bdd_clear = "INSERT INTO dict (password) VALUES (%s) ON DUPLICATE KEY UPDATE seen=seen+1" # Modifier requête pour checker si même repo ne pas incrémenter seen (cf. parser)
 
 
@@ -107,6 +107,8 @@ def callback(ch, method, properties, body):
 				# Hash password db insert
 				val_hash = [hash, hashType, val_clear]		# Link foreign key for clear password
 				cursor.execute(insert_bdd_hash, val_hash)
+				mariadb_connection.commit() #must commit to get the inserted id
+				cursor.execute(update_bdd_hash, (cursor.lastrowid,val_hash))
 				mariadb_connection.commit()
 				print(cursor.rowcount, "Hashed password was inserted")
 				
@@ -125,11 +127,11 @@ def callback(ch, method, properties, body):
 
 	# Insert hash in db if the script hasn't cracked it
 	if success_token == False:
-		possibleHashTypes = str(rabbitMQ_data_array['possibleHashTypes'])
-		val_hash = [hash, possibleHashTypes, None]
-		cursor.execute(insert_bdd_hash, val_hash)
-		mariadb_connection.commit()
-		print(cursor.rowcount, "Hash not decrypted was inserted in db")
+		#possibleHashTypes = str(rabbitMQ_data_array['possibleHashTypes'])
+		#val_hash = [hash, possibleHashTypes, None]
+		#cursor.execute(insert_bdd_hash, val_hash)
+		#mariadb_connection.commit()
+		print("Hash not decrypted")
 
 
 channel.basic_consume(queue_name, callback, auto_ack=False) #registering processing function

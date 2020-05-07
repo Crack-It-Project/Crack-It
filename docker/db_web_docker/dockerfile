@@ -1,0 +1,7 @@
+#Dockerfile of the crackit wui db
+#Based on mariadb
+#
+
+FROM mariadb
+
+COPY web.sql /docker-entrypoint-initdb.d/web.sql
