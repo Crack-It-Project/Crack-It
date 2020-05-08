@@ -14,6 +14,20 @@ import magic
 import time
 from zxcvbn import zxcvbn
 
+#========================================================================
+#Setting up regular expressions
+
+#idSemicolumnThenItem = regex.compile('[^:^\n]*:([^\n]+)')
+#idSemicolumnThenItem = regex.compile('\b(?!http|https|ftp|sftp|rtmp|ws)[^:^\n0-9]+:(?!\/\/)([^\n]+)') # make this regex way better here password starting with // won't work
+
+#This regular expression is sued to check passwords list in this format TextOrUser:Password  Whitespaces between the semicolon : are ignored.
+#We first compile it, which create an object we can sue to apply the regex, it is also faster than using the re. function directly
+#I had to split the negative look-behinds (?<!https) into multiple because python does not seems to support them together (eg : (?<!https|http))
+idSemicolumnThenItem = regex.compile(r'\b[^:^\n0-9]+(?<!http)(?<!https)(?<!ftp)(?<!sftp)(?<!rtmp)(?<!ws):([^\s\n]+)') #TODO: check this
+
+
+
+
 
 ########################################## FUNCTONS ##########################################
 
@@ -81,6 +95,7 @@ parsers = {
 #Main function
 #Parses a given file and then extracts all passwords and hashes founded. Return a mutli-level dict
 def analyzeFile(fileDscrpt, srckey):
+    global idSemicolumnThenItem, hashID
     print("Processing one file")
 
     #return dict structure
@@ -109,9 +124,12 @@ def analyzeFile(fileDscrpt, srckey):
     print("Method: ["+method+"]")
 
     for line in fileDscrpt:  #we parse line by line
-        
+        print("Ligne: "+line)
         if method == "semicolonlist":
             d = idSemicolumnThenItem.match(line) #apply the regex
+            print("Applied regex")
+            print(d)
+
             if lines < 1000: #we don't really care about counting lines if we are over 1000, this is only used to detect if this is a list or not, and only on first lines
                 lines += 1
             if lines > matches + 20:   #number of missed matches to consider the file invalid
@@ -121,12 +139,14 @@ def analyzeFile(fileDscrpt, srckey):
 
         if method == "fulllist" or d: #if the regex match or we are in fulllist mode (= each line is a "string of interest")
             matches += 1 
+            print("Got One match")
             if method == "semicolonlist":
-                item=d.group(2).lstrip() #strip leading spaces if there were some after the semicolon
+                item=d.group(1).lstrip() #strip leading spaces if there were some after the semicolon
             else:
                 item=line # the whole line is kept in fulllist mode
             item=item.rstrip('\r\n') #remove trailing newlines (works for any combinaisons, so it works for DOS, OSX and Unix line endings)
             #print(item)
+            print("Checking for hash")
             hashType = hashID.identifyHash(item)  #try to identify a hash
             hashcatcount=0 #number of possible hash types identified
             #hash data structure declaration, this is what is sent via rabbitMQ. This is stored in the return dict in an array of these
@@ -146,7 +166,9 @@ def analyzeFile(fileDscrpt, srckey):
 
             #if there are no match, it must me plain text            
             isPassword=False
-            if hashcatcount > 0:                   #TODO: find a better way because we're going to have a lot of false positive.'
+            if hashcatcount > 0: 
+                print("Got a hash")
+                print("Testing for false positive")                  #TODO: find a better way because we're going to have a lot of false positive.'
                 results = zxcvbn(item)
                 if results['guesses_log10'] >= 11:
                     hashSummary["value"]=item
@@ -259,19 +281,6 @@ hashID = hashid.HashID()
 #========================================================================
 
 mime = magic.Magic(mime=True)
-
-#========================================================================
-#Setting up regular expressions
-
-#idSemicolumnThenItem = regex.compile('[^:^\n]*:([^\n]+)')
-#idSemicolumnThenItem = regex.compile('\b(?!http|https|ftp|sftp|rtmp|ws)[^:^\n0-9]+:(?!\/\/)([^\n]+)') # make this regex way better here password starting with // won't work
-
-#This regular expression is sued to check passwords list in this format TextOrUser:Password  Whitespaces between the semicolon : are ignored.
-#We first compile it, which create an object we can sue to apply the regex, it is also faster than using the re. function directly
-#I had to split the negative look-behinds (?<!https) into multiple because python does not seems to support them together (eg : (?<!https|http))
-idSemicolumnThenItem = regex.compile('\b[^:^\s\n0-9]+(?<!http)(?<!https)(?<!ftp)(?<!sftp)(?<!rtmp)(?<!ws)(=|:)([^\s\n]+)') #TODO: check this
-
-
 ########################################## END FUNCTONS #######################################
 
 
