@@ -1,3 +1,5 @@
 requests
 mysqlclient
 pika
+gitpython
+python-magic
