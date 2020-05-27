@@ -13,16 +13,17 @@ import magic
 
 
 tmpDirectory="/sharedTmp"
+cacheDirectory="/cache"
 
 mime = magic.Magic(mime=True)
 
 
-def get_random_unique_filename(dest):
+def get_random_unique_filename(dest, ext=".txt"):
     nameavail=False
     if not os.path.isdir(dest):
         return None
     while not nameavail:
-        filename=uuid.uuid4().hex+'.txt'
+        filename=uuid.uuid4().hex+ext
         if not os.path.exists(os.path.join(dest,filename)):
             return filename
 
@@ -44,7 +45,7 @@ def get_repo_name_from_url(url):
 #========================================================================
 #MODULE DELCARATION AND CONFIGURATION SECTION
 
-def parser_pastebin(url, dest):
+def parser_pastebin(url, cache, dest):
     filename=get_random_unique_filename(dest)
     with open(os.path.join(dest,filename), 'w') as tmp:
         #fetch url and write content in temporary file
@@ -52,29 +53,34 @@ def parser_pastebin(url, dest):
         print("Compiled one pastebin file")
     return [filename]
 
-def parser_github(url, dest):
+def parser_github(url, cache, dest):
     
     returns=[]
+    newsourcehint=json.loads(sourcehint) or []
     #get repo name
     reponame=get_repo_name_from_url(url)
-    repopath=os.path.join(os.getcwd(), os.path.join(dest,reponame))
+    repopath=os.path.join(os.getcwd(), os.path.join(cache,reponame))
     #clone the repo
     if os.path.isdir(repopath):
         repo = Repo(repopath)
         pullinfo = repo.remotes.origin.pull()
-    #    pullchanges=repo.index.diff(pullinfo[0].old_commit) #TODO: check this
+        for item in repo.index.diff(pullinfo[0].old_commit): #TODO: check this
+            newpath=os.path.join(dest,get_random_unique_filename(dest, "."+os.path.basename(a_path)))
+            shutil.copyfile(a_path, newpath)
+            returns.append(newpath)
 
     else:
         repo = Repo.clone_from(url, repopath)
-    #find all files in the repo
-    for root, subdirs, files in os.walk(repo.working_tree_dir):
-        for file in files:
-            filepath=os.path.join(root, file)
-            if mime.from_file(filepath) == "text/plain": #only allow plain text files
-                #with open(filepath, "rb") as readfile:
-                    #append their content to the temporary file
-                    #shutil.copyfileobj(readfile, tmp)
-                returns.append(filepath)
+        for root, subdirs, files in os.walk(repo.working_tree_dir):
+            for file in files:
+                filepath=os.path.join(root, file)
+                if mime.from_file(filepath) == "text/plain": #only allow plain text files
+                    #with open(filepath, "rb") as readfile:
+                        #append their content to the temporary file
+                        #shutil.copyfileobj(readfile, tmp)
+                    newpath=os.path.join(dest,get_random_unique_filename(dest, "."+file))
+                    shutil.copyfile(filepath, newpath)
+                    returns.append(newpath)
         
     #send the temporary file file descriptor
 
@@ -188,7 +194,7 @@ def main():
         mariadb_connection.commit() # w ecoult batch commit, but is it really worth it here ?
         for itemToParse in result:
             #assemble a json message to easely combine the two values, m=> module to use, v => url
-            datafiles=pre_parsers[row[2]](itemToParse, tmpDirectory)
+            datafiles=pre_parsers[row[2]](itemToParse, cacheDirectory, tmpDirectory)
             for datafile in datafiles:
 
                 
@@ -199,7 +205,7 @@ def main():
                 message=json.dumps({"m": row[2], "s": itemToParse, "v": datafile})
                 #send the message through rabbbitMQ using the urls exchange
                 channel.basic_publish(exchange='files', routing_key='', body=message)
-
+        
 
 
     #closing connection to rabbitMQ

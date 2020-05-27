@@ -74,7 +74,7 @@ CREATE TABLE `source` (
 --
 
 INSERT INTO `source` (`idsource`, `url`, `module`, `name`, `sourceHint`) VALUES
-(2, 'https://github.com/danielmiessler/SecLists.git', 'git', NULL, NULL),
+#(2, 'https://github.com/danielmiessler/SecLists.git', 'git', NULL, NULL),
 (3, 'https://scrape.pastebin.com/api_scraping.php?lang=email', 'pastebin', NULL, NULL),
 (4, 'https://scrape.pastebin.com/api_scraping.php?lang=bash', 'pastebin', NULL, NULL);
 

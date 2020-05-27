@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+
+    <title>Cover Template · Bootstrap</title>
+
+    <link rel="canonical" href="https://getbootstrap.com/docs/4.5/examples/cover/">
+
+    <!-- Bootstrap core CSS -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css"
+        integrity="sha384-9aIt2nRpC12Uk9gS9baDl411NQApFmC26EwAOH8WgZl5MYYxFfc+NcPb1dKGj7Sk" crossorigin="anonymous">
+
+    <!-- Material Design Bootstrap -->
+    <link rel="stylesheet" href="css/mdb.min.css">
+
+    <!-- Custom styles for this template -->
+    <link href="cover.css" rel="stylesheet">
+    <link href="style.css" rel="stylesheet">
+</head>
+
+<body class="text-center">
+
+    <div class="cover-container d-flex w-100 h-100 p-3 mx-auto flex-column">
+
+        <header class="masthead mb-auto">
+            <div class="inner">
+                <h3 class="masthead-brand">Crackit</h3>
+                <nav class="nav nav-masthead justify-content-center">
+                    <a class="nav-link active" href="#">Accueil</a>
+                    <a class="nav-link" href="#">Connexion</a>
+                </nav>
+            </div>
+        </header>
+
+        <!-- Form mdp-->
+        <main role="main" class="inner cover" id="mdp">
+
+            <!-- Formulaire -->
+            <div class="card bg-dark p-3">
+                <h3>Testez votre mot de passe ici</h3>
+                <form action="">
+                    <div class="form-group">
+                        <input type="test" class="form-control">
+                        <small class="form-text text-muted">Nous n'utiliserons jamais votre mot de passe</small>
+                    </div>
+                </form>
+                <button onclick="change()" class="btn btn-warning">Vérifier</button>
+            </div>
+
+        </main>
+
+        <!-- Statistiques -->
+        <main role="main" class="inner cover" id="stats" hidden>
+
+            <div class="row">
+                <div class="col">                
+                    <div class="alert alert-danger mx-auto" role="alert">Attention ! Mot de passe trop faible !</div>
+                </div>
+            </div>
+
+            <div class="row mt-3">
+                <div class="col">
+                    <div class="card bg-dark">
+                        <h4>Top des mots de passe</h4>
+
+                        <table class="table table-striped table-dark">
+                            <thead>
+                              <tr>
+                                <th scope="col">#</th>
+                                <th scope="col">Texte</th>
+                                <th scope="col">Nb de vues</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr>
+                                <th scope="row">1</th>
+                                <td>password</td>
+                                <td>54534</td>
+                              </tr>
+                              <tr>
+                                <th scope="row">2</th>
+                                <td>azerty123</td>
+                                <td>3855</td>
+                              </tr>
+                              <tr>
+                                <th scope="row">3</th>
+                                <td>123456</td>
+                                <td>1546</td>
+                              </tr>
+                            </tbody>
+                        </table>
+
+                    </div>
+                </div>
+
+                <div class="col">
+
+                    <div class="card bg-dark">
+                        <h4>Total du dictionnaire</h4>
+                        <p>6'231</p>
+                    </div>
+
+                    <div class="card bg-dark mt-3">
+                        <h4>Total de hashes</h4>
+                        <p>1'568</p>
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div class="row mt-3">
+                <div class="col">
+                    <div class="card bg-dark p-3">
+                        <h3>Nombre de mots de passe trouvé sur les 7 derniers jours</h3>
+                        <canvas id="lineChart"></canvas>
+                    </div>
+                </div>
+            </div>
+           
+
+        </main>
+
+        <footer class="mastfoot mt-auto">
+            <div class="inner">
+                <p>Cover template for <a href="https://getbootstrap.com/">Bootstrap</a>, by <a
+                        href="https://twitter.com/mdo">@mdo</a>.</p>
+            </div>
+        </footer>
+    </div>
+
+</body>
+
+<!-- jQuery -->
+<script type="text/javascript" src="js/jquery.min.js"></script>
+<!-- Bootstrap tooltips -->
+<script type="text/javascript" src="js/popper.min.js"></script>
+<!-- Bootstrap core JavaScript -->
+<script type="text/javascript" src="js/bootstrap.min.js"></script>
+<!-- MDB core JavaScript -->
+<script type="text/javascript" src="js/mdb.min.js"></script>
+
+<!-- Graph -->
+<script>
+    //line
+    var ctxL = document.getElementById("lineChart").getContext('2d');
+    var myLineChart = new Chart(ctxL, {
+    type: 'line',
+    data: {
+    labels: ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"],
+    datasets: [{
+    label: "Nombre de mots de passe trouvés",
+    data: [27, 537, 386, 752, 486, 125, 563],
+    backgroundColor: [
+    'rgba(251,198,69, .2)',
+    ],
+    borderColor: [
+    'rgba(251,198,69)',
+    ],
+    borderWidth: 2}
+    ]},
+    options: {
+    responsive: true
+    }
+    });
+</script>
+
+<script>
+function change() {
+  var mdp = document.getElementById("mdp");
+  var stats = document.getElementById("stats");
+  stats.className = stats.toggleAttribute("hidden");
+  mdp.className = mdp.toggleAttribute("hidden");
+} 
+</script>
+
+</html>
