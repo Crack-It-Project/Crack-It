@@ -1,0 +1,4 @@
+flask
+cracklib
+zxcvbn
+mysqlclient

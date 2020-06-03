@@ -10,6 +10,6 @@ WORKDIR /code
 
 COPY . .
 
-RUN pip install -r requirements.txt
+RUN apt-get update && apt-get install -y libcrack2 cracklib-runtime && pip install -r requirements.txt
 
 CMD ["python","compiler.py"]

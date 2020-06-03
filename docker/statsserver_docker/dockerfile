@@ -1,0 +1,17 @@
+#Dockerfile of the crackit db compiler
+#Based on Python 3
+#
+
+FROM python:3
+
+RUN apt-get update 
+
+WORKDIR /code
+
+COPY . .
+
+RUN apt-get update && apt-get install -y libcrack2-dev libcrack2 && pip install -r requirements.txt
+
+EXPOSE 5000
+
+CMD ["python","app.py"]

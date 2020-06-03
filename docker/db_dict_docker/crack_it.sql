@@ -29,7 +29,8 @@ SET time_zone = "+00:00";
 CREATE TABLE `dict` (
   `id` bigint(20) UNSIGNED NOT NULL,
   `password` varchar(535) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,
-  `seen` int(11) NOT NULL DEFAULT 1
+  `seen` int(11) NOT NULL DEFAULT 1,
+  `date` date DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- --------------------------------------------------------

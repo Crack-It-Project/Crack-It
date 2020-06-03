@@ -17,6 +17,21 @@ services:
             - "sharedTmpFileQueue:/sharedTmp"
             - "sourceFileCache:/cache"
 
+    statsserver:
+        image: "statsserver_docker"
+        networks: 
+            - "database"
+            - "web"
+        depends_on:
+            - db_dict
+        env_file:
+            - ./back.env
+        build:
+            context: statsserver_docker
+            dockerfile: dockerfile
+        volumes: 
+            - ./volumes/dict:/dict
+
     parser:
         image: "parser_docker"
         networks: 
@@ -105,6 +120,8 @@ services:
         volumes:
             - ./volumes/web:/var/www/html
             - ./nginx_docker:/etc/nginx/conf.d #Exception ! Allow us to avoid another dockerfile
+        depends_on:
+            - statsserver
         links:
             - php
         networks: 

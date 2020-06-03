@@ -54,3 +54,5 @@ cursor.close()
 # Erase the older doctionnary file and replce it by the new one
 copyfile('/dict/new_dict.txt', '/dict/dict.txt')
 os.remove("/dict/new_dict.txt")
+
+os.system("create-cracklib-dict -o /dict/cracklib /dict/dict.txt")
