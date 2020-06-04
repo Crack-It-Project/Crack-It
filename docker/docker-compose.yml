@@ -1,7 +1,7 @@
 version: '3'
 services:
     crawler:
-        image: "crawler_docker"
+        image: "crawler"
         networks: 
             - "messages"
             - "database"
@@ -11,29 +11,28 @@ services:
         env_file:
             - ./back.env
         build:
-            context: crawler_docker
+            context: crawler
             dockerfile: dockerfile
         volumes: 
             - "sharedTmpFileQueue:/sharedTmp"
             - "sourceFileCache:/cache"
 
-    statsserver:
-        image: "statsserver_docker"
+    fetcher:
+        image: "hashfetcher"
         networks: 
+            - "messages"
             - "database"
-            - "web"
         depends_on:
             - db_dict
+            - rabbitmq
         env_file:
             - ./back.env
         build:
-            context: statsserver_docker
+            context: hashfetcher
             dockerfile: dockerfile
-        volumes: 
-            - ./volumes/dict:/dict
 
     parser:
-        image: "parser_docker"
+        image: "parser"
         networks: 
             - "messages"
             - "database"
@@ -51,32 +50,32 @@ services:
         env_file:
             - ./back.env
         build:
-            context: parser_docker
+            context: parser
             dockerfile: dockerfile
         restart: 
             always
 
     hacker:
-        image: "hacker_docker"
+        image: "hacker"
         networks: 
             - "messages"
             - "database"
         depends_on:
             - db_dict
             - rabbitmq
-            - crawler
         env_file:
             - ./back.env
         volumes:
             - ./volumes/dict:/dict
+            - "./commons/python-mysqldb-reconnect/mysqldb.py:/code/mysqldb.py:ro"
         build:
-            context: hacker_docker
+            context: hacker
             dockerfile: dockerfile
         restart: 
             always
     
     compiler:
-        image: "compiler_docker"
+        image: "compiler"
         networks:
            - "database"
         depends_on:
@@ -86,15 +85,15 @@ services:
         volumes:
             - ./volumes/dict:/dict
         build:
-           context: compiler_docker
+           context: compiler
            dockerfile: dockerfile   
 
     db_dict:
-        image: "db_dict_docker"
+        image: "db_dict"
         networks: 
             - "database"
         build:
-            context: db_dict_docker
+            context: db_dict
             dockerfile: dockerfile
         env_file:
             - ./back.env
@@ -116,52 +115,32 @@ services:
     nginx:
         image: "nginx"
         ports:
-            - "8080:80"
+            - "80:80"
         volumes:
             - ./volumes/web:/var/www/html
-            - ./nginx_docker:/etc/nginx/conf.d #Exception ! Allow us to avoid another dockerfile
+            - ./nginx:/etc/nginx/conf.d #Exception ! Allow us to avoid another dockerfile
         depends_on:
             - statsserver
-        links:
-            - php
         networks: 
             - "web"
         restart: 
             always
 
-    php:
-        image: "php"
-        build:
-            context: php_docker
-            dockerfile: dockerfile
-        volumes:
-            - ./volumes/web:/var/www/html
+    statsserver:
+        image: "statsserver"
+        networks: 
+            - "database"
+            - "web"
         depends_on:
             - db_dict
-            - db_web
-        networks: 
-            - "database"
-            - "web"
-        restart: 
-            always
-
-    db_web:
-        image: "db_web_docker"
-        networks: 
-            - "database"
+        env_file:
+            - ./back.env
         build:
-            context: db_web_docker
+            context: statsserver
             dockerfile: dockerfile
-        environment:
-            MYSQL_RANDOM_ROOT_PASSWORD: "yes"
-            MYSQL_DATABASE: "web"
-            MYSQL_USER: "databaseweb"
-            MYSQL_PASSWORD: "databaseweb_passwd"
-        volumes:
-            - ./volumes/db_web:/var/lib/mysql"
-        restart: 
-            always
-            
+        volumes: 
+            - ./volumes/dict:/dict
+      
 networks:
     messages:
     database:
@@ -171,5 +150,4 @@ volumes:
     sharedTmpFileQueue:
     sourceFileCache:
 #    db_dict:
-#    db_web:
 #    dict:

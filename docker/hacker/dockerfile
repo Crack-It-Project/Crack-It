@@ -1,0 +1,15 @@
+#Dockerfile of the crackit hacker
+#Based on Python 3
+#
+
+FROM python:3
+
+RUN apt-get update && apt-get install -y hashcat
+
+WORKDIR /code
+
+COPY . .
+
+RUN pip install -r requirements.txt
+
+CMD ["python","hacker.py"]

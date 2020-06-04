@@ -1,4 +1,0 @@
-flask
-cracklib
-zxcvbn
-mysqlclient
