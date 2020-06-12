@@ -5,16 +5,27 @@ import os
 from zxcvbn import zxcvbn
 import simplejson as json
 import MySQLdb as mariadb
-from datetime import timedelta
+import threading
+from datetime import datetime, timedelta
 
-app = Flask(__name__)
 dictPath="/dict/cracklib"
 #dictPath="/usr/lib/cracklib_dict"
-# defining a route
 
-def timedeltaser(o):
-    if isinstance(o, timedelta):
-        return o.__str__()
+
+app = Flask(__name__)
+
+cache= {
+    "date": None,
+    "hash": {
+        "count": None
+    },
+    "password": {
+        "count": None,
+        "top10": None,
+        "lastweek": None
+    }
+}
+
 
 def getDB():
     success=False
@@ -28,6 +39,72 @@ def getDB():
             time.sleep(5)
     return mariadb_connection
 
+
+
+def updateCache(cache, cacheLock):
+    from datetime import datetime
+    todaydate=datetime.now()
+    print("Updating")
+
+    cursor = getDB().cursor()
+
+    _SQL = (""" 
+            SELECT * FROM dict ORDER BY seen DESC LIMIT 10
+            """)
+    cursor.execute(_SQL)
+    top10 = cursor.fetchall()
+
+    cursor = getDB().cursor()
+
+    _SQL = (""" 
+            SELECT count(*) FROM dict
+            """)
+    cursor.execute(_SQL)
+    pcount=cursor.fetchall()
+
+    cursor = getDB().cursor()
+    _SQL = (""" 
+            SELECT count(*) FROM hash
+            """)
+    cursor.execute(_SQL)
+    hcount = cursor.fetchall()
+
+    cursor = getDB().cursor()
+
+    _SQL = (""" 
+            SELECT count(dictt.id), days.lastdays, DATE(days.weekdaydate), dictt.date FROM ( select DAYOFWEEK(DATE_ADD(NOW(), INTERVAL -6 DAY)) as lastdays, DATE_ADD(NOW(), INTERVAL -6 DAY) as weekdaydate union select DAYOFWEEK(DATE_ADD(NOW(), INTERVAL -5 DAY)) as lastdays, DATE_ADD(NOW(), INTERVAL -5 DAY) as weekdaydate union select DAYOFWEEK(DATE_ADD(NOW(), INTERVAL -4 DAY)) as lastdays, DATE_ADD(NOW(), INTERVAL -4 DAY) as weekdaydate union select DAYOFWEEK(DATE_ADD(NOW(), INTERVAL -3 DAY)) as lastdays, DATE_ADD(NOW(), INTERVAL -3 DAY) as weekdaydate union select DAYOFWEEK(DATE_ADD(NOW(), INTERVAL -2 DAY)) as lastdays, DATE_ADD(NOW(), INTERVAL -2 DAY) as weekdaydate union	select DAYOFWEEK(DATE_ADD(NOW(), INTERVAL -1 DAY)) as lastdays, DATE_ADD(NOW(), INTERVAL -1 DAY) as weekdaydate union select DAYOFWEEK(DATE_ADD(NOW(), INTERVAL 0 DAY)) as lastdays, DATE_ADD(NOW(), INTERVAL 0 DAY) as weekdaydate  ) days LEFT JOIN ( SELECT date, id FROM dict WHERE date >= DATE_ADD(NOW(), INTERVAL -7 DAY) ) dictt ON DAYOFWEEK(dictt.date) = days.lastdays GROUP BY days.lastdays ORDER BY days.weekdaydate DESC
+            """)
+    cursor.execute(_SQL)
+    lastweek = cursor.fetchall()
+
+    cacheLock.acquire()
+    print("Saving")
+    cache["password"]["count"]=pcount
+    cache["password"]["top10"]=top10
+    cache["password"]["lastweek"]=lastweek
+    cache["hash"]["count"]=hcount
+    cache["date"]=todaydate
+    cacheLock.release()
+
+
+cacheLock = threading.Lock()
+updateThread = threading.Thread(target=updateCache, args=(cache, cacheLock)) 
+updateThread.daemon = True
+
+def scheduleUpdate():
+    delay=timedelta(hours=2)
+    if cache["date"] is None or datetime.now()-cache["date"] >= delay:
+        if updateThread.is_alive():
+            print("Already updating...")
+        else:
+            updateThread.start()       
+
+
+
+def timedeltaserialize(o):
+    if isinstance(o, timedelta):
+        return o.__str__()
+
 @app.route("/api/password/check", methods=['POST']) # decorator
 def password_check(): # route handler function
     # returning a response
@@ -39,50 +116,29 @@ def password_check(): # route handler function
         dictcheck=str(err)
     results = zxcvbn(password)
 
-    return json.dumps({"overall": dictcheck.capitalize(), "details": results}, default=timedeltaser)
+    return json.dumps({"overall": dictcheck.capitalize(), "details": results}, default=timedeltaserialize)
 
 @app.route("/api/password/stats/top10", methods=['GET']) # decorator
 def password_stats_top10(): # route handler function
-    cursor = getDB().cursor()
-
-    _SQL = (""" 
-            SELECT * FROM dict ORDER BY seen DESC LIMIT 10
-            """)
-    cursor.execute(_SQL)
-    result = cursor.fetchall()
-    return jsonify(result)
+    scheduleUpdate()
+    return jsonify({"date": cache["date"], "data": cache["password"]["top10"]})
 
 @app.route("/api/password/stats/count", methods=['GET']) # decorator
 def password_stats_count(): # route handler function
-    cursor = getDB().cursor()
-
-    _SQL = (""" 
-            SELECT count(*) FROM dict
-            """)
-    cursor.execute(_SQL)
-    result = cursor.fetchall()
-    return jsonify(result)
+    scheduleUpdate()
+    return jsonify({"date": cache["date"], "data": cache["password"]["count"]})
 
 @app.route("/api/hash/stats/count", methods=['GET']) # decorator
 def hash_stats_count(): # route handler function
-    cursor = getDB().cursor()
-    _SQL = (""" 
-            SELECT count(*) FROM hash
-            """)
-    cursor.execute(_SQL)
-    result = cursor.fetchall()
-    return jsonify(result)
+    scheduleUpdate()
+    return jsonify({"date": cache["date"], "data": cache["hash"]["count"]})
 
 @app.route("/api/password/stats/lastweek", methods=['GET']) # decorator
 def password_stats_lastweek(): # route handler function
-    cursor = getDB().cursor()
+    scheduleUpdate()
+    return jsonify({"date": cache["date"], "data": cache["password"]["lastweek"]})
 
-    _SQL = (""" 
-            SELECT count(*) FROM dict WHERE date >= DATE_ADD(NOW(), INTERVAL -7 DAY) GROUP BY DAYOFWEEK(date) ORDER BY date DESC
-            """)
-    cursor.execute(_SQL)
-    result = cursor.fetchall()
-    return jsonify(result)
 
 if __name__ == "__main__":
+    scheduleUpdate()
     app.run(host='0.0.0.0') 

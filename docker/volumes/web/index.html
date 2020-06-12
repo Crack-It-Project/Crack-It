@@ -78,17 +78,23 @@
                             <tbody>
                               <tr>
                                 <th scope="row">1</th>
-                                <td id="top1"></td>
+                                <td id="top1">
+                                    <div class="spinner-border text-warning" role="status"></div>
+                                </td>
                                 <td id="top1_nb"></td>
                               </tr>
                               <tr>
                                 <th scope="row">2</th>
-                                <td id="top2"></td>
+                                <td id="top2">
+                                    <div class="spinner-border text-warning" role="status"></div>
+                                </td>
                                 <td id="top2_nb"></td>
                               </tr>
                               <tr>
                                 <th scope="row">3</th>
-                                <td id="top3"></td>
+                                <td id="top3">
+                                    <div class="spinner-border text-warning" role="status"></div>
+                                </td>
                                 <td id="top3_nb"></td>
                               </tr>
                             </tbody>
@@ -101,12 +107,16 @@
 
                     <div class="card bg-dark">
                         <h4>Total dictionnary</h4>
-                        <p id="total"></p>
+                        <p id="total">
+                            <div id="spinnerTotal" class="spinner-border text-warning" role="status"></div>
+                        </p>
                     </div>
 
                     <div class="card bg-dark mt-3">
                         <h4>Total hashes</h4>
-                        <p id="hash"></p>
+                        <p id="hash">
+                            <div id="spinnerHash" class="spinner-border text-warning" role="status"></div>
+                        </p>
                     </div>
 
                     <a href=".">
@@ -155,25 +165,27 @@
 <script>
     //Top passwords
     $.ajax({dataType: "json", url: "/api/password/stats/top10", success: function(result){ 
-        $("#top1").html(result[0][1]);
-        $("#top1_nb").html(result[0][2]);
+        $("#top1").html(result["data"][0][1]);
+        $("#top1_nb").html(result["data"][0][2]);
 
-        $("#top2").html(result[1][1]);
-        $("#top2_nb").html(result[0][2]);
+        $("#top2").html(result["data"][1][1]);
+        $("#top2_nb").html(result["data"][0][2]);
 
-        $("#top3").html(result[2][1]);
-        $("#top3_nb").html(result[0][2]);
+        $("#top3").html(result["data"][2][1]);
+        $("#top3_nb").html(result["data"][0][2]);
 
     }});
 
     //Total passwords
     $.ajax({url: "/api/password/stats/count", success: function(result){ 
-        $("#total").html(result);
+        document.getElementById("spinnerTotal").toggleAttribute("hidden");
+        $("#total").html(result["data"]);
     }});
 
     //Total hashes
     $.ajax({url: "/api/hash/stats/count", success: function(result){ 
-        $("#hash").html(result);
+        document.getElementById("spinnerHash").toggleAttribute("hidden");
+        $("#hash").html(result["data"]);
     }});
 
     //===============================================
@@ -191,7 +203,6 @@
 
         $.post("/api/password/check", {"password":password}, function(result) { 
             var data = JSON.parse(result);
-            console.log(data);
 
             var adviceCard = document.getElementById("adviceCard");
             var adviceTitle = document.getElementById("adviceTitle");
@@ -215,7 +226,11 @@
                 adviceCard.classList.add("alert-danger");
                 adviceTitle.innerHTML = data["overall"];
                 adviceInfo.innerHTML = data["details"]["feedback"]["warning"] + "<br>" + "It would takes <b>" + data["details"]["crack_times_display"]["offline_slow_hashing_1e4_per_second"] + "</b> to crack it.";
-                adviceFeedback.innerHTML = data["details"]["feedback"]["suggestions"][0] + "<br>" + data["details"]["feedback"]["suggestions"][1];
+                if (data["details"]["feedback"]["suggestions"][1] != undefined) {
+                    adviceFeedback.innerHTML = data["details"]["feedback"]["suggestions"][0] + "<br>" + data["details"]["feedback"]["suggestions"][1];
+                }else{
+                    adviceFeedback.innerHTML = data["details"]["feedback"]["suggestions"][0]
+                }
             };
             
             
@@ -238,13 +253,13 @@
     //Seven days
     one = two = three = four = five = six = seven = 0;
     $.ajax({url: "/api/password/stats/lastweek", success: function(result){ 
-        one = result[0][0];
+        one = result["data"][0][0];
         if (typeof result[1] !== 'undefined') {two = result[1][0];};
-        if (typeof result[1] !== 'undefined') {three = result[2][0];};
-        if (typeof result[1] !== 'undefined') {four = result[3][0];};
-        if (typeof result[1] !== 'undefined') {five = result[4][0];};
-        if (typeof result[1] !== 'undefined') {six = result[5][0];};
-        if (typeof result[1] !== 'undefined') {seven = result[6][0];};
+        if (typeof result[2] !== 'undefined') {three = result[2][0];};
+        if (typeof result[3] !== 'undefined') {four = result[3][0];};
+        if (typeof result[4] !== 'undefined') {five = result[4][0];};
+        if (typeof result[5] !== 'undefined') {six = result[5][0];};
+        if (typeof result[6] !== 'undefined') {seven = result[6][0];};
 
         //line
         var ctxL = document.getElementById("lineChart").getContext('2d');

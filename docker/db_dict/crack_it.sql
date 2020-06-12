@@ -67,7 +67,8 @@ CREATE TABLE `source` (
   `url` tinytext DEFAULT NULL,
   `module` varchar(45) DEFAULT NULL,
   `name` tinytext DEFAULT NULL,
-  `sourceHint` varchar(255) DEFAULT NULL COMMENT 'Used by the modules to know when was the last time this soruce was checked (could be date but also hash etc...)'
+  `sourceHint` varchar(255) DEFAULT NULL COMMENT 'Used by the modules to know when was the last time this soruce was checked (could be date but also hash etc...)',
+  `weight` int(255) NOT NULL,
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 --
@@ -75,9 +76,9 @@ CREATE TABLE `source` (
 --
 
 INSERT INTO `source` (`idsource`, `url`, `module`, `name`, `sourceHint`) VALUES
-(1, 'https://github.com/danielmiessler/SecLists.git', 'git', NULL, NULL),
-(2, 'https://scrape.pastebin.com/api_scraping.php?lang=email', 'pastebin', NULL, NULL),
-(3, 'https://scrape.pastebin.com/api_scraping.php?lang=bash', 'pastebin', NULL, NULL);
+(1, 'https://github.com/danielmiessler/SecLists.git', 'git', NULL, NULL, 10),
+(2, 'https://scrape.pastebin.com/api_scraping.php?lang=email', 'pastebin', NULL, NULL, 1),
+(3, 'https://scrape.pastebin.com/api_scraping.php?lang=bash', 'pastebin', NULL, NULL, 1);
 
 --
 -- Index pour les tables exportées

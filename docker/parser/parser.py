@@ -30,7 +30,7 @@ idSemicolumnThenItem = regex.compile(r'\b[^:^\n0-9]+(?<!http)(?<!https)(?<!ftp)(
 
 #Main function
 #Parses a given file and then extracts all passwords and hashes founded. Return a mutli-level dict
-def analyzeFile(fileDscrpt, srckey):
+def analyzeFile(fileDscrpt, srckey, weight):
     global idSemicolumnThenItem, hashID
     
 
@@ -115,7 +115,7 @@ def analyzeFile(fileDscrpt, srckey):
             else:
                 isPassword=True
             if isPassword:
-                registerPassword(item, srckey)
+                registerPassword(item, srckey, weight)
                 
     print("done")
 
@@ -131,18 +131,25 @@ def callback(ch, method, properties, body):
     #datafiles=parsers[params["m"]](params["v"])  #we select and execute the appropriate parser by name from the parser list. (the parser name is also in the packet)
     # we get a file descriptor we can pass to analyseFile, we get a dict which contains everything extracted from it
     filename=os.path.join(tmpDirectory,params["v"])
-    #Latin 1 will work for utf-8 but may mangle character if we edit the stream (see the official doc)
-    with open(filename, 'r', encoding="latin-1") as file:
-        print("Processing file : "+filename)
-        analyzeFile(file, params["s"])
 
-    print("LAST COMMIT")
-    mariadb_connection.commit()
-    print("Deleting source file")
-    os.remove(filename)
-    print("ACK-ING the message")
-    ch.basic_ack(method.delivery_tag)
-    
+    #Check if file exist to avoid errors
+    if os.path.isfile(filename) == True :
+        #Latin 1 will work for utf-8 but may mangle character if we edit the stream (see the official doc)
+        with open(filename, 'r', encoding="latin-1") as file:
+            print("Processing file : "+filename)
+            analyzeFile(file, params["s"], params["w"])
+        print("LAST COMMIT")
+        mariadb_connection.commit()
+        print("Deleting source file")
+        os.remove(filename)
+        print("ACK-ING the message")
+        ch.basic_ack(method.delivery_tag)
+    else :
+        print("FILE DOES NOT EXIST...")
+        mariadb_connection.commit()
+        print("ACK-ING the message")
+        ch.basic_ack(method.delivery_tag)
+
 #========================================================================
 
 def commitIfNecessary():
@@ -154,15 +161,15 @@ def commitIfNecessary():
 
 #========================================================================
 
-def registerPassword(password, srckey):
+def registerPassword(password, srckey, weight):
     global dbactioncount, cursor, mariadb_connection
     print("[Saving] Password: "+password)
     #sql = "INSERT INTO dict (password) VALUES (%s) ON DUPLICATE KEY UPDATE seen = if(CAST((select count(*) from origin_dict WHERE origin_dict.srckey = %s) AS UNSIGNED) > 0, dict.seen, dict.seen+1);"  
-    sql="INSERT INTO dict (password) VALUES (%s) ON DUPLICATE KEY UPDATE seen = if((SELECT count(*) FROM (select * from origin_dict INNER JOIN dict ON dict.id = origin_dict.item WHERE origin_dict.srckey = %s AND dict.password = %s) s) > 0, dict.seen, dict.seen+1);" #insert the password, and if it already exist, increment the "seen" counter only it we didn't get it from the same source
+    sql="INSERT INTO dict (password) VALUES (%s) ON DUPLICATE KEY UPDATE seen = (if((SELECT count(*) FROM (select * from origin_dict INNER JOIN dict ON dict.id = origin_dict.item WHERE origin_dict.srckey = %s AND dict.password = %s) s) > 0, dict.seen, dict.seen+1))*%s;" #insert the password, and if it already exist, increment the "seen" counter only it we didn't get it from the same source
     sql2 = "INSERT INTO origin_dict(srckey, item) VALUES (%s, (select id from dict WHERE password = %s)) ON DUPLICATE KEY UPDATE srckey=srckey;" #remember from which source the entry is from, if this is the first time we see it.
     
     try:
-        cursor.execute(sql, (password, srckey, password))
+        cursor.execute(sql, (password, srckey, password, weight))
         #mariadb_connection.commit()
         cursor.execute(sql2, (srckey, password))
 

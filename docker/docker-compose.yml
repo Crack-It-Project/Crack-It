@@ -38,7 +38,7 @@ services:
             - "database"
         deploy:
             mode: replicated #use global to only have one instance per node
-            replicas: 2
+            replicas: 3
             placement:
                 constraints:
                   - "node.role==worker"
@@ -55,8 +55,8 @@ services:
         restart: 
             always
 
-    hacker:
-        image: "hacker"
+    cracker:
+        image: "cracker"
         networks: 
             - "messages"
             - "database"
@@ -69,7 +69,7 @@ services:
             - ./volumes/dict:/dict
             - "./commons/python-mysqldb-reconnect/mysqldb.py:/code/mysqldb.py:ro"
         build:
-            context: hacker
+            context: cracker
             dockerfile: dockerfile
         restart: 
             always

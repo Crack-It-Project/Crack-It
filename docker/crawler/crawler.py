@@ -123,10 +123,15 @@ def crawler_github(url, sourcehint):
     sourcehint=None
     return returns, sourcehint
 
-def crawler_git(url, sourcehint):
-    returns = [url]
-    sourcehint = None
-    return returns, sourcehint
+def crawler_git(url, sourcehint):                   # # # # # # # # # # # # #
+    if sourcehint != "seen":                        # Made a patch here !
+        returns = [url]                             #
+        sourcehint = "seen"                         # Skipping already seen git
+    else:                                           # Previous code lead to thousands of repetitive files
+        returns = [None]                            #    from the same git
+        sourcehint = "seen"                         #
+        print("skipping already seen git")          # One time is good or we need to find another way to detect changes
+    return returns, sourcehint                      # # # # # # # # # # # # #
 
 #add your crawler in this dict to register it, the key is the one the DB should use
 crawlers = {
@@ -189,12 +194,15 @@ def main():
     for row in result:
         #We call the module the row is aksing for (value: row[2]) in the crawler dict, which is a registry of all modules. We then pass it the url from the DB row 
         #the result is an array of urls
-        result, newsourcehint =crawlers[row[2]](row[1], row[4])
+        result, newsourcehint = crawlers[row[2]](row[1], row[4])
         cursor.execute("UPDATE source SET sourceHint = %s WHERE idsource = %s;", (newsourcehint, row[0]))
-        mariadb_connection.commit() # w ecoult batch commit, but is it really worth it here ?
+        mariadb_connection.commit() # we could batch commit, but is it really worth it here ?
         for itemToParse in result:
             #assemble a json message to easely combine the two values, m=> module to use, v => url
-            datafiles=pre_parsers[row[2]](itemToParse, cacheDirectory, tmpDirectory)
+            if itemToParse != None :
+                datafiles=pre_parsers[row[2]](itemToParse, cacheDirectory, tmpDirectory)
+            else:
+                continue
             for datafile in datafiles:
 
                 
@@ -202,10 +210,9 @@ def main():
 
 
 
-                message=json.dumps({"m": row[2], "s": itemToParse, "v": datafile})
+                message=json.dumps({"m": row[2], "s": itemToParse, "v": datafile, "w": row[5]})
                 #send the message through rabbbitMQ using the urls exchange
                 channel.basic_publish(exchange='files', routing_key='', body=message)
-        
 
 
     #closing connection to rabbitMQ

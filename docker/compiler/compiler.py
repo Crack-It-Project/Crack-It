@@ -23,7 +23,7 @@ while not success:
 cursor = mariadb_connection.cursor()
 
 # Select all clear passwords in db
-select_password_clear = "SELECT password FROM dict"
+select_password_clear = "SELECT password FROM dict ORDER BY seen DESC"
 
 cursor.execute(select_password_clear)
 
