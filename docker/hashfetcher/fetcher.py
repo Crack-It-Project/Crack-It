@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 import requests
-import MySQLdb as mariadb
+from mysqldb import DB
 import pika
 import sys
 import os
@@ -12,7 +12,7 @@ import time
 
 
 #connecting to rabbitMQ
-
+"""
 success=False
 while not success:
     try:
@@ -23,6 +23,9 @@ while not success:
         success=False
         print("Failed to connect to database... Retrying in 5 seconds.")
         time.sleep(5)
+"""
+db = DB(host='db_dict', port=3306, user=os.environ['MYSQL_USER'], password=os.environ['MYSQL_PASSWORD'], database='crack_it')
+db.connect()
 
 success=False
 while not success:
@@ -49,12 +52,12 @@ channel.queue_bind(exchange='hashes', queue=queue_name)
 #========================================================================
 
 #QUERY INIT
-cursor = mariadb_connection.cursor()
+#cursor = mariadb_connection.cursor()
 _SQL = (""" 
         SELECT str, algo FROM hash WHERE clear IS NULL;
         """)
 #QUERY EXECUTE
-cursor.execute(_SQL)
+cursor = db.query(_SQL)
 result = cursor.fetchall()
 
 for row in result:

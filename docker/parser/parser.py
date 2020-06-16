@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-import MySQLdb as mariadb
+from mysqldb import DB
 import pika
 import sys
 import json
@@ -162,16 +162,16 @@ def commitIfNecessary():
 #========================================================================
 
 def registerPassword(password, srckey, weight):
-    global dbactioncount, cursor, mariadb_connection
+    global dbactioncount, mariadb_connection
     print("[Saving] Password: "+password)
     #sql = "INSERT INTO dict (password) VALUES (%s) ON DUPLICATE KEY UPDATE seen = if(CAST((select count(*) from origin_dict WHERE origin_dict.srckey = %s) AS UNSIGNED) > 0, dict.seen, dict.seen+1);"  
-    sql="INSERT INTO dict (password) VALUES (%s) ON DUPLICATE KEY UPDATE seen = (if((SELECT count(*) FROM (select * from origin_dict INNER JOIN dict ON dict.id = origin_dict.item WHERE origin_dict.srckey = %s AND dict.password = %s) s) > 0, dict.seen, dict.seen+1))*%s;" #insert the password, and if it already exist, increment the "seen" counter only it we didn't get it from the same source
+    sql="INSERT INTO dict (password, seen) VALUES (%s, %s) ON DUPLICATE KEY UPDATE seen = (if((SELECT count(*) FROM (select * from origin_dict INNER JOIN dict ON dict.id = origin_dict.item WHERE origin_dict.srckey = %s AND dict.password = %s) s) > 0, dict.seen, dict.seen+1))+%s;" #insert the password, and if it already exist, increment the "seen" counter only it we didn't get it from the same source
     sql2 = "INSERT INTO origin_dict(srckey, item) VALUES (%s, (select id from dict WHERE password = %s)) ON DUPLICATE KEY UPDATE srckey=srckey;" #remember from which source the entry is from, if this is the first time we see it.
     
     try:
-        cursor.execute(sql, (password, srckey, password, weight))
+        mariadb_connection.query(sql, (password, weight, srckey, password, weight))
         #mariadb_connection.commit()
-        cursor.execute(sql2, (srckey, password))
+        mariadb_connection.query(sql2, (srckey, password))
 
         dbactioncount+=2
         
@@ -186,11 +186,11 @@ def registerPassword(password, srckey, weight):
 #========================================================================
 
 def sendHash(ihash):
-    global dbactioncount, cursor, mariadb_connection
+    global dbactioncount, mariadb_connection
     insert_bdd_hash = "INSERT INTO hash (str, algo, clear) VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE str=str;"
 
     print("[Saving] Hash: "+ihash["value"])
-    cursor.execute(insert_bdd_hash, (ihash["value"], json.dumps(ihash["possibleHashTypes"]), None))
+    mariadb_connection.query(insert_bdd_hash, (ihash["value"], json.dumps(ihash["possibleHashTypes"]), None))
     dbactioncount+=1
     commitIfNecessary()
     #message=json.dumps(ihash) #serializing the dict to json
@@ -205,9 +205,10 @@ hashID = hashid.HashID()
 ########################################## END FUNCTONS #######################################
 
 def main():
-    global mariadb_connection, dbactioncount, cursor, channel
+    global mariadb_connection, dbactioncount, channel
     #========================================================================
     #Connecting to mariadb
+    """
     success=False
     while not success:
         try:
@@ -217,10 +218,11 @@ def main():
             success=False
             print("Failed to connect to database... Retrying in 5 seconds.")
             time.sleep(5)
-
+    """
+    mariadb_connection = DB(host='db_dict', port=3306, user=os.environ['MYSQL_USER'], password=os.environ['MYSQL_PASSWORD'], database='crack_it')
     #QUERY INIT
-    cursor = mariadb_connection.cursor()
-
+    #cursor = mariadb_connection.cursor()
+    mariadb_connection.connect()
 
     #========================================================================
     #Connecting to RabbitMQ
@@ -278,7 +280,7 @@ def main():
 
     #========================================================================
     #closing connection to rabbitMQ, important 
-    connection.close()
+    #connection.close()
 
 if __name__ == '__main__':
     main()

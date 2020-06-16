@@ -3,12 +3,13 @@
 from __future__ import generators
 import sys
 import os
-import MySQLdb as mariadb
+from mysqldb import DB
 import time
 from pathlib import Path
 from shutil import copyfile
 
 # Db connect
+"""
 success=False
 while not success:
     try:
@@ -18,14 +19,16 @@ while not success:
         success=False
         print("Failed to connect to database... Retrying in 5 seconds.")
         time.sleep(5)
-
+"""
+db = DB(host='db_dict', port=3306, user=os.environ['MYSQL_USER'], password=os.environ['MYSQL_PASSWORD'], database='crack_it')
+db.connect()
 # Create a cursor object to execute queries
-cursor = mariadb_connection.cursor()
+#cursor = mariadb_connection.cursor()
 
 # Select all clear passwords in db
 select_password_clear = "SELECT password FROM dict ORDER BY seen DESC"
 
-cursor.execute(select_password_clear)
+cursor=db.query(select_password_clear)
 
 # Create the new dictionnary in txt format
 Path('/dict/new_dict.txt').touch()

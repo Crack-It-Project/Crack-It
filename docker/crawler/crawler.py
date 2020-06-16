@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 import requests
-import MySQLdb as mariadb
+from mysqldb import DB
 import pika
 import sys
 import os
@@ -65,7 +65,7 @@ def parser_github(url, cache, dest):
         repo = Repo(repopath)
         pullinfo = repo.remotes.origin.pull()
         for item in repo.index.diff(pullinfo[0].old_commit): #TODO: check this
-            newpath=os.path.join(dest,get_random_unique_filename(dest, "."+os.path.basename(item.a_path)))
+            newpath=os.path.join(dest,get_random_unique_filename(dest, "."+os.path.basename(item.a_path)[0:10]))
             shutil.copyfile(os.path.join(repopath,item.a_path), newpath)
             returns.append(newpath)
 
@@ -78,7 +78,7 @@ def parser_github(url, cache, dest):
                     #with open(filepath, "rb") as readfile:
                         #append their content to the temporary file
                         #shutil.copyfileobj(readfile, tmp)
-                    newpath=os.path.join(dest,get_random_unique_filename(dest, "."+file))
+                    newpath=os.path.join(dest,get_random_unique_filename(dest, "."+file[0:10]))
                     shutil.copyfile(filepath, newpath)
                     returns.append(newpath)
         
@@ -147,6 +147,7 @@ crawlers = {
 #connecting to rabbitMQ
 
 def main():
+    """
     success=False
     while not success:
         try:
@@ -157,7 +158,9 @@ def main():
             success=False
             print("Failed to connect to database... Retrying in 5 seconds.")
             time.sleep(5)
-
+    """
+    db = DB(host='db_dict', port=3306, user=os.environ['MYSQL_USER'], password=os.environ['MYSQL_PASSWORD'], database='crack_it')
+    db.connect()
     success=False
     while not success:
         try:
@@ -183,20 +186,20 @@ def main():
     #========================================================================
 
     #QUERY INIT
-    cursor = mariadb_connection.cursor()
+    #cursor = mariadb_connection.cursor()
     _SQL = (""" 
             SELECT * FROM source
             """)
     #QUERY EXECUTE
-    cursor.execute(_SQL)
+    cursor=db.query(_SQL)
     result = cursor.fetchall()
-
+    print("Before loop")
     for row in result:
         #We call the module the row is aksing for (value: row[2]) in the crawler dict, which is a registry of all modules. We then pass it the url from the DB row 
         #the result is an array of urls
         result, newsourcehint = crawlers[row[2]](row[1], row[4])
-        cursor.execute("UPDATE source SET sourceHint = %s WHERE idsource = %s;", (newsourcehint, row[0]))
-        mariadb_connection.commit() # we could batch commit, but is it really worth it here ?
+        cursor= db.query("UPDATE source SET sourceHint = %s WHERE idsource = %s;", (newsourcehint, row[0]))
+        db.commit() # we could batch commit, but is it really worth it here ?
         for itemToParse in result:
             #assemble a json message to easely combine the two values, m=> module to use, v => url
             if itemToParse != None :
@@ -209,7 +212,7 @@ def main():
                 #filedest=
 
 
-
+                print("Sending one file.")
                 message=json.dumps({"m": row[2], "s": itemToParse, "v": datafile, "w": row[5]})
                 #send the message through rabbbitMQ using the urls exchange
                 channel.basic_publish(exchange='files', routing_key='', body=message)
@@ -217,6 +220,7 @@ def main():
 
     #closing connection to rabbitMQ
     connection.close()
+    print("Crawler done !")
 
 if __name__ == '__main__':
     main()

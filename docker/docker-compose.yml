@@ -16,6 +16,7 @@ services:
         volumes: 
             - "sharedTmpFileQueue:/sharedTmp"
             - "sourceFileCache:/cache"
+            - "./commons/python-mysqldb-reconnect/mysqldb.py:/code/mysqldb.py:ro"
 
     fetcher:
         image: "hashfetcher"
@@ -30,6 +31,8 @@ services:
         build:
             context: hashfetcher
             dockerfile: dockerfile
+        volumes:
+            - "./commons/python-mysqldb-reconnect/mysqldb.py:/code/mysqldb.py:ro"
 
     parser:
         image: "parser"
@@ -44,6 +47,7 @@ services:
                   - "node.role==worker"
         volumes: 
             - "sharedTmpFileQueue:/sharedTmp"
+            - "./commons/python-mysqldb-reconnect/mysqldb.py:/code/mysqldb.py:ro"
         depends_on:
             - db_dict
             - rabbitmq
@@ -66,7 +70,7 @@ services:
         env_file:
             - ./back.env
         volumes:
-            - ./volumes/dict:/dict
+            - "./volumes/dict:/dict"
             - "./commons/python-mysqldb-reconnect/mysqldb.py:/code/mysqldb.py:ro"
         build:
             context: cracker
@@ -83,7 +87,8 @@ services:
         env_file:
             - ./back.env
         volumes:
-            - ./volumes/dict:/dict
+            - "./volumes/dict:/dict"
+            - "./commons/python-mysqldb-reconnect/mysqldb.py:/code/mysqldb.py:ro"
         build:
            context: compiler
            dockerfile: dockerfile   
@@ -101,7 +106,7 @@ services:
             MYSQL_RANDOM_ROOT_PASSWORD: "yes"
             MYSQL_DATABASE: "crack_it"
         volumes:
-            - ./volumes/db_dict:/var/lib/mysql"
+            - "./volumes/db_dict:/var/lib/mysql"
         restart: 
             always
 
@@ -117,8 +122,8 @@ services:
         ports:
             - "80:80"
         volumes:
-            - ./volumes/web:/var/www/html
-            - ./nginx:/etc/nginx/conf.d #Exception ! Allow us to avoid another dockerfile
+            - "./volumes/web:/var/www/html"
+            - "./nginx:/etc/nginx/conf.d" #Exception ! Allow us to avoid another dockerfile
         depends_on:
             - statsserver
         networks: 
@@ -139,7 +144,7 @@ services:
             context: statsserver
             dockerfile: dockerfile
         volumes: 
-            - ./volumes/dict:/dict
+            - "./volumes/dict:/dict"
       
 networks:
     messages:

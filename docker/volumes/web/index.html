@@ -219,7 +219,11 @@
                     adviceCard.classList.add("alert-warning");
                     adviceTitle.innerHTML = "Not in our dictionnary but <b>too easy to guess</b>";
                     adviceInfo.innerHTML = "It would takes <b>" + data["details"]["crack_times_display"]["online_no_throttling_10_per_second"] + "</b> to crack it.";
-                    adviceFeedback.innerHTML = data["details"]["feedback"]["suggestions"][0];
+                    if (data["details"]["feedback"]["suggestions"][0]) {
+                        adviceFeedback.innerHTML = data["details"]["feedback"]["suggestions"][0];
+                    }else{
+                        adviceFeedback.innerHTML = "Try to make it more complex for ideal security";
+                    }
                 }
                 
             }else{
@@ -229,7 +233,7 @@
                 if (data["details"]["feedback"]["suggestions"][1] != undefined) {
                     adviceFeedback.innerHTML = data["details"]["feedback"]["suggestions"][0] + "<br>" + data["details"]["feedback"]["suggestions"][1];
                 }else{
-                    adviceFeedback.innerHTML = data["details"]["feedback"]["suggestions"][0]
+                    adviceFeedback.innerHTML = data["details"]["feedback"]["suggestions"][0];
                 }
             };
             

@@ -12,6 +12,7 @@ import os.path
 from os import path
 import pika
 import time
+import subprocess
 """
 success=False
 while not success:
@@ -24,6 +25,7 @@ while not success:
         time.sleep(5)
 """
 db = DB(host='db_dict', port=3306, user=os.environ['MYSQL_USER'], password=os.environ['MYSQL_PASSWORD'], database='crack_it')
+db.connect()
 
 success=False
 while not success:
@@ -86,8 +88,8 @@ def callback(ch, method, properties, body):
 			hashType = str(hashTypesNumber)
 
 			# hashs cracking
-			crack = os.system("hashcat -a 0 -m "+ hashType +" -o cracked.txt --force "+ hash +" dict/dict.txt --show")
-
+			#crack = os.system("hashcat -a 0 -m "+ hashType +" -o cracked.txt --force "+ hash +" dict/dict.txt --show")
+			crack = subprocess.check_output(["hashcat","-a","0", "-m", hashType, "-o", "cracked.txt", "--force", hash, "dict/dict.txt", "--show"], stderr=subprocess.STDOUT, shell=True)
 			# Success
 			if (os.stat("cracked.txt").st_size != 0):
 				print("------------------------------Success------------------------------")
