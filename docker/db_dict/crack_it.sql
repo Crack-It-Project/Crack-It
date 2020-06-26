@@ -58,6 +58,41 @@ CREATE TABLE `origin_dict` (
 
 -- --------------------------------------------------------
 
+
+
+--
+-- Table structure for table `origin_hash`
+--
+
+CREATE TABLE `origin_hash` (
+  `srckey` varchar(255) NOT NULL,
+  `item` bigint(20) UNSIGNED NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+--
+-- Indexes for dumped tables
+--
+
+--
+-- Indexes for table `origin_hash`
+--
+ALTER TABLE `origin_hash`
+  ADD PRIMARY KEY (`srckey`),
+  ADD KEY `origin_hash_hashId` (`item`);
+
+--
+-- Constraints for dumped tables
+--
+
+--
+-- Constraints for table `origin_hash`
+--
+ALTER TABLE `origin_hash`
+  ADD CONSTRAINT `origin_hash_hashId` FOREIGN KEY (`item`) REFERENCES `hash` (`id`);
+COMMIT;
+
+-- --------------------------------------------------------
+
 --
 -- Structure de la table `source`
 --

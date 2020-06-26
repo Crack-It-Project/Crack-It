@@ -9,21 +9,8 @@ from pathlib import Path
 from shutil import copyfile
 
 # Db connect
-"""
-success=False
-while not success:
-    try:
-        mariadb_connection = mariadb.connect(host='db_dict', user=os.environ['MYSQL_USER'], password=os.environ['MYSQL_PASSWORD'], database='crack_it')
-        success=True
-    except mariadb._exceptions.OperationalError as e:
-        success=False
-        print("Failed to connect to database... Retrying in 5 seconds.")
-        time.sleep(5)
-"""
 db = DB(host='db_dict', port=3306, user=os.environ['MYSQL_USER'], password=os.environ['MYSQL_PASSWORD'], database='crack_it')
 db.connect()
-# Create a cursor object to execute queries
-#cursor = mariadb_connection.cursor()
 
 # Select all clear passwords in db
 select_password_clear = "SELECT password FROM dict ORDER BY seen DESC"
@@ -45,12 +32,6 @@ def PasswordIterator(cursor, arraysize=1000):
 with open("/dict/new_dict.txt", "a") as myfile:
 	for password in PasswordIterator(cursor):
 		myfile.write(str(password[0])+"\n")
-
-# Fetchone method
-#password_clear = cursor.fetchone()
-#while password_clear is not None:
-#	os.system("echo "+ password_clear + ">> dict.txt")
-#	password_clear = cursor.fetchone()
 
 cursor.close()
 

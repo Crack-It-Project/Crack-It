@@ -2,6 +2,6 @@
 #Based on mariadb
 #
 
-FROM mariadb
+FROM mariadb:10.4.13
 
 COPY crack_it.sql /docker-entrypoint-initdb.d/crack_it.sql

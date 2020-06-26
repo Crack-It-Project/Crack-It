@@ -8,8 +8,10 @@ RUN apt-get update
 
 WORKDIR /code
 
-COPY . .
+COPY requirements.txt ./
 
 RUN apt-get update && apt-get install -y libcrack2 cracklib-runtime && pip install -r requirements.txt
+
+COPY compiler.py ./
 
 CMD ["python","compiler.py"]

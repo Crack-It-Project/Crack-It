@@ -12,18 +12,6 @@ import time
 
 
 #connecting to rabbitMQ
-"""
-success=False
-while not success:
-    try:
-        #connecting to mariadb
-        mariadb_connection = mariadb.connect(host='db_dict', user=os.environ['MYSQL_USER'], password=os.environ['MYSQL_PASSWORD'], database='crack_it')
-        success=True
-    except mariadb._exceptions.OperationalError as e:
-        success=False
-        print("Failed to connect to database... Retrying in 5 seconds.")
-        time.sleep(5)
-"""
 db = DB(host='db_dict', port=3306, user=os.environ['MYSQL_USER'], password=os.environ['MYSQL_PASSWORD'], database='crack_it')
 db.connect()
 
@@ -52,8 +40,7 @@ channel.queue_bind(exchange='hashes', queue=queue_name)
 #========================================================================
 
 #QUERY INIT
-#cursor = mariadb_connection.cursor()
-_SQL = (""" 
+_SQL = ("""
         SELECT str, algo FROM hash WHERE clear IS NULL;
         """)
 #QUERY EXECUTE

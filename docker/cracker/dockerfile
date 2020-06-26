@@ -8,8 +8,10 @@ RUN apt-get update && apt-get install -y hashcat
 
 WORKDIR /code
 
-COPY . .
+COPY requirements.txt ./
 
 RUN pip install -r requirements.txt
+
+COPY cracker.py ./
 
 CMD ["python","cracker.py"]

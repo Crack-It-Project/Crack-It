@@ -62,26 +62,27 @@ def parser_github(url, cache, dest):
     repopath=os.path.join(os.getcwd(), os.path.join(cache,reponame))
     #clone the repo
     if os.path.isdir(repopath):
+        print("Using cached repo (pull mode)")
         repo = Repo(repopath)
         pullinfo = repo.remotes.origin.pull()
         for item in repo.index.diff(pullinfo[0].old_commit): #TODO: check this
+            print("New/modified item : A:"+item.a_path+"  B:"+item.b_path)
             newpath=os.path.join(dest,get_random_unique_filename(dest, "."+os.path.basename(item.a_path)[0:10]))
+            print("New path : "+newpath)
             shutil.copyfile(os.path.join(repopath,item.a_path), newpath)
             returns.append(newpath)
 
     else:
+        print("Cloning repo repo (clone mode)")
         repo = Repo.clone_from(url, repopath)
         for root, subdirs, files in os.walk(repo.working_tree_dir):
             for file in files:
                 filepath=os.path.join(root, file)
                 if mime.from_file(filepath) == "text/plain": #only allow plain text files
-                    #with open(filepath, "rb") as readfile:
-                        #append their content to the temporary file
-                        #shutil.copyfileobj(readfile, tmp)
                     newpath=os.path.join(dest,get_random_unique_filename(dest, "."+file[0:10]))
                     shutil.copyfile(filepath, newpath)
                     returns.append(newpath)
-        
+
     #send the temporary file file descriptor
 
     return returns
@@ -124,13 +125,13 @@ def crawler_github(url, sourcehint):
     return returns, sourcehint
 
 def crawler_git(url, sourcehint):                   # # # # # # # # # # # # #
-    if sourcehint != "seen":                        # Made a patch here !
-        returns = [url]                             #
-        sourcehint = "seen"                         # Skipping already seen git
-    else:                                           # Previous code lead to thousands of repetitive files
-        returns = [None]                            #    from the same git
-        sourcehint = "seen"                         #
-        print("skipping already seen git")          # One time is good or we need to find another way to detect changes
+    #  if sourcehint != "seen":                        # Made a patch here !
+    returns = [url]                             #
+    #    sourcehint = "seen"                         # Skipping already seen git
+    # else:                                           # Previous code lead to thousands of repetitive files
+    #     returns = [None]                            #    from the same git
+    #    sourcehint = "seen"                         #
+    #    print("skipping already seen git")          # One time is good or we need to find another way to detect changes
     return returns, sourcehint                      # # # # # # # # # # # # #
 
 #add your crawler in this dict to register it, the key is the one the DB should use
@@ -147,18 +148,6 @@ crawlers = {
 #connecting to rabbitMQ
 
 def main():
-    """
-    success=False
-    while not success:
-        try:
-            #connecting to mariadb
-            mariadb_connection = mariadb.connect(host='db_dict', user=os.environ['MYSQL_USER'], password=os.environ['MYSQL_PASSWORD'], database='crack_it')
-            success=True
-        except mariadb._exceptions.OperationalError as e:
-            success=False
-            print("Failed to connect to database... Retrying in 5 seconds.")
-            time.sleep(5)
-    """
     db = DB(host='db_dict', port=3306, user=os.environ['MYSQL_USER'], password=os.environ['MYSQL_PASSWORD'], database='crack_it')
     db.connect()
     success=False
@@ -186,8 +175,7 @@ def main():
     #========================================================================
 
     #QUERY INIT
-    #cursor = mariadb_connection.cursor()
-    _SQL = (""" 
+    _SQL = ("""
             SELECT * FROM source
             """)
     #QUERY EXECUTE
@@ -207,11 +195,6 @@ def main():
             else:
                 continue
             for datafile in datafiles:
-
-                
-                #filedest=
-
-
                 print("Sending one file.")
                 message=json.dumps({"m": row[2], "s": itemToParse, "v": datafile, "w": row[5]})
                 #send the message through rabbbitMQ using the urls exchange

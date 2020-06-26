@@ -121,9 +121,11 @@ services:
         image: "nginx"
         ports:
             - "80:80"
+            - "443:443"
         volumes:
             - "./volumes/web:/var/www/html"
             - "./nginx:/etc/nginx/conf.d" #Exception ! Allow us to avoid another dockerfile
+            - "./certs:/etc/nginx/certs:ro"
         depends_on:
             - statsserver
         networks: 

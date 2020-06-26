@@ -13,17 +13,7 @@ from os import path
 import pika
 import time
 import subprocess
-"""
-success=False
-while not success:
-    try:
-        mariadb_connection = mariadb.connect(host='db_dict', user=os.environ['MYSQL_USER'], password=os.environ['MYSQL_PASSWORD'], database='crack_it')
-        success=True
-    except mariadb._exceptions.OperationalError as e:
-        success=False
-        print("Failed to connect to database... Retrying in 5 seconds.")
-        time.sleep(5)
-"""
+
 db = DB(host='db_dict', port=3306, user=os.environ['MYSQL_USER'], password=os.environ['MYSQL_PASSWORD'], database='crack_it')
 db.connect()
 
@@ -54,7 +44,12 @@ def callback(ch, method, properties, body):
 	check_bdd = "SELECT str FROM hash WHERE str = %s AND clear IS NOT NULL"
 	update_bdd_hash = "UPDATE hash SET clear = %s WHERE str = %s"
 	insert_bdd_clear = "INSERT INTO dict (password) VALUES (%s) ON DUPLICATE KEY UPDATE seen=seen+1" # Modifier requête pour checker si même repo ne pas incrémenter seen (cf. parser)
-
+	insert_bdd_clear_notAhash = "INSERT INTO dict (password, seen) VALUES (%s, %s) ON DUPLICATE KEY UPDATE seen=seen+%s"
+	get_origin_hash_seen = "SELECT count(*) FROM origin_hash WHERE item = %s"
+	move_origin_data = "INSERT INTO origin_dict (srckey, item) SELECT srckey, (SELECT id FROM dict WHERE password = %s) FROM origin_hash WHERE item = %s"
+	delete_old_origin_data = "DELETE FROM origin_hash WHERE item = %s"
+	delete_old_hash = "DELETE FROM hash WHERE id = %s"
+	get_hash_ID = "SELECT id FROM hash WHERE str = %s"
 
 
 	# Get Hashs
@@ -80,7 +75,7 @@ def callback(ch, method, properties, body):
 		print("Hash already exists !")
 		success_token = True
 
-
+	notAHash=0
 	if hash_presence_in_bdd == False:
 
 		# Get Hash types (numbers) for hash types in hashcat
@@ -88,8 +83,23 @@ def callback(ch, method, properties, body):
 			hashType = str(hashTypesNumber)
 
 			# hashs cracking
-			#crack = os.system("hashcat -a 0 -m "+ hashType +" -o cracked.txt --force "+ hash +" dict/dict.txt --show")
-			crack = subprocess.check_output(["hashcat","-a","0", "-m", hashType, "-o", "cracked.txt", "--force", hash, "dict/dict.txt", "--show"], stderr=subprocess.STDOUT, shell=True)
+			try:
+				crack = subprocess.check_output(["hashcat","-a","0", "--show", "-m", hashType, "-o", "cracked.txt", "--force", hash, "dict/dict.txt"], stderr=subprocess.STDOUT, shell=False)
+				if crack is not '':
+					print("=======")
+					print(crack)
+					print("=======")
+			except subprocess.CalledProcessError as e:
+				error=e.output.decode()
+				
+				if "Hash-value exception" in error or "Separator unmatched" in error:
+					notAHash+=1			
+				else:
+					print("Unexpected error : "+error)
+				print("Hashcat failed.")
+				
+
+
 			# Success
 			if (os.stat("cracked.txt").st_size != 0):
 				print("------------------------------Success------------------------------")
@@ -122,6 +132,27 @@ def callback(ch, method, properties, body):
 			# Fail
 			else:
 				pass
+			
+
+	if notAHash == len(rabbitMQ_data_array['possibleHashTypes']):
+		print("Not a hash ! this is probably a password ! Saving in DB.")
+		hashId=db.query(get_hash_ID, (hash,)).fetchall()[0][0]
+		print("Old Hash ID: "+str(hashId))
+		cursor = db.query(get_origin_hash_seen, (hashId,))
+		count=cursor.fetchall()[0][0]
+		cursor = db.query(insert_bdd_clear_notAhash, (hash, count, count))
+		cursor = db.query(move_origin_data, (hash,hashId))
+		cursor = db.query(delete_old_origin_data, (hashId,))
+		cursor = db.query(delete_old_hash, (hashId, ))
+		db.commit()
+		print("Done")
+	else:
+		print("==============")
+		print("Not going to save in DB.")
+		print("Errors: "+str(notAHash))
+		print("Hash Types : "+str(len(rabbitMQ_data_array['possibleHashTypes'])))
+		print("Hash in question : "+hash)
+	
 
 	# Erase cracked.txt file
 	os.system("rm cracked.txt 2> /dev/null")

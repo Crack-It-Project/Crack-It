@@ -1,4 +1,4 @@
-#Dockerfile of the crackit db compiler
+#Dockerfile of the crackit statserver api
 #Based on Python 3
 #
 
@@ -8,10 +8,12 @@ RUN apt-get update
 
 WORKDIR /code
 
-COPY . .
+COPY requirements.txt ./
 
 RUN apt-get update && apt-get install -y libcrack2-dev libcrack2 && pip install -r requirements.txt
 
 EXPOSE 5000
+
+COPY app.py ./
 
 CMD ["python","app.py"]
