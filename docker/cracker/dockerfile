@@ -4,9 +4,22 @@
 
 FROM python:3
 
-RUN apt-get update && apt-get install -y hashcat
+#RUN apt-get update && apt-get install -y hashcat
+
+WORKDIR /tmp/setup/hashcat
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential git ca-certificates 
+RUN apt-get install pocl-opencl-icd
+RUN git clone https://github.com/hashcat/hashcat.git . && git submodule update --init && make install
+WORKDIR /tmp/setup/hashcat-utils
+RUN git clone https://github.com/hashcat/hashcat-utils.git . && git submodule update --init && cd src/ && make
+
 
 WORKDIR /code
+RUN mkdir bin && cp /tmp/setup/hashcat-utils/src/*.bin ./bin/ && cp -r /tmp/setup/hashcat ./ && rm -rf /tmp/setup && find ./bin -type f -name '*.bin' | while read f; do mv "$f" "${f%.bin}"; done
+RUN git clone https://github.com/trustedsec/hate_crack.git &&  cd hate_crack/hashcat-utils && rm -rf bin && ln -s ../../bin && cd ..
+
+
+COPY config.json hate_crack/
 
 COPY requirements.txt ./
 

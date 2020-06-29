@@ -258,12 +258,12 @@
     one = two = three = four = five = six = seven = 0;
     $.ajax({url: "/api/password/stats/lastweek", success: function(result){ 
         one = result["data"][0][0];
-        if (typeof result[1] !== 'undefined') {two = result[1][0];};
-        if (typeof result[2] !== 'undefined') {three = result[2][0];};
-        if (typeof result[3] !== 'undefined') {four = result[3][0];};
-        if (typeof result[4] !== 'undefined') {five = result[4][0];};
-        if (typeof result[5] !== 'undefined') {six = result[5][0];};
-        if (typeof result[6] !== 'undefined') {seven = result[6][0];};
+        if (typeof result["data"][1] !== 'undefined') {two = result["data"][1][0];};
+        if (typeof result["data"][2] !== 'undefined') {three = result["data"][2][0];};
+        if (typeof result["data"][3] !== 'undefined') {four = result["data"][3][0];};
+        if (typeof result["data"][4] !== 'undefined') {five = result["data"][4][0];};
+        if (typeof result["data"][5] !== 'undefined') {six = result["data"][5][0];};
+        if (typeof result["data"][6] !== 'undefined') {seven = result["data"][6][0];};
 
         //line
         var ctxL = document.getElementById("lineChart").getContext('2d');
