@@ -114,7 +114,8 @@ def crawler_pastebin(url, sourcehint):
             returns.append(item.get('scrape_url'))
         else:
             print("skipping already seen paste")
-    return returns, newsourcehint
+    returnHint=sourcehint if newsourcehint == "-1" else newsourcehint
+    return returns, returnHint
 
 def crawler_github(url, sourcehint):
     returns = []
@@ -124,15 +125,9 @@ def crawler_github(url, sourcehint):
     sourcehint=None
     return returns, sourcehint
 
-def crawler_git(url, sourcehint):                   # # # # # # # # # # # # #
-    #  if sourcehint != "seen":                        # Made a patch here !
-    returns = [url]                             #
-    #    sourcehint = "seen"                         # Skipping already seen git
-    # else:                                           # Previous code lead to thousands of repetitive files
-    #     returns = [None]                            #    from the same git
-    #    sourcehint = "seen"                         #
-    #    print("skipping already seen git")          # One time is good or we need to find another way to detect changes
-    return returns, sourcehint                      # # # # # # # # # # # # #
+def crawler_git(url, sourcehint):
+    returns = [url]
+    return returns, sourcehint                      
 
 #add your crawler in this dict to register it, the key is the one the DB should use
 crawlers = {

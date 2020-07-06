@@ -8,26 +8,47 @@ import hashid
 import os
 import time
 from zxcvbn import zxcvbn
-
+import math
+import subprocess
+import threading
+import functools
+import logging
 tmpDirectory="/sharedTmp"
 
 #========================================================================
 #Setting up regular expressions
 
-#This regular expression is sued to check passwords list in this format TextOrUser:Password  Whitespaces between the semicolon : are ignored.
+#This regular expression is used to check passwords list in this format TextOrUser:Password  Whitespaces between the semicolon : are ignored.
 #We first compile it, which create an object we can sue to apply the regex, it is also faster than using the re. function directly
 #I had to split the negative look-behinds (?<!https) into multiple because python does not seems to support them together (eg : (?<!https|http))
 idSemicolumnThenItem = regex.compile(r'\b[^:^\n0-9]+(?<!http)(?<!https)(?<!ftp)(?<!sftp)(?<!rtmp)(?<!ws):([^\s\n]+)') #TODO: check this
 
 hashID = hashid.HashID()
 
+def ack_message(channel, delivery_tag):
+    if channel.is_open:
+        channel.basic_ack(delivery_tag)
+    else:
+        pass
+
+def wccount(filename):
+    out = subprocess.Popen(['wc', '-l', filename],
+                         stdout=subprocess.PIPE,
+                         stderr=subprocess.STDOUT
+                         ).communicate()[0]
+    return int(out.partition(b' ')[0])
+
+def mapValue(x, in_min, in_max, out_min, out_max):
+    return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
 #========================================================================
 
 #Main function
 #Parses a given file and then extracts all passwords and hashes founded. Return a mutli-level dict
-def analyzeFile(fileDscrpt, srckey, weight):
+def analyzeFile(fileDscrpt, weight, linecount):
     global idSemicolumnThenItem, hashID
 
+    returnHashes=[]
+    returnPasswords=[]
     #return dict structure
     results = {
         "hashes": [],
@@ -45,13 +66,13 @@ def analyzeFile(fileDscrpt, srckey, weight):
     linesizeavg /= lines
 
     method="" #depending on the previous result, we choose a full passwordlist parsing method or a user:password parsing regex
-    if os.fstat(fileDscrpt.fileno()).st_size > 20000000 and linesizeavg < 32:
+    if os.fstat(fileDscrpt.fileno()).st_size > 100000 and linesizeavg < 32:
         method="fulllist"
     else:
         method="semicolonlist"
     lines=0 #we now use this to check for how many lines are not matched by the regex
 
-    print("Method: ["+method+"]")
+    logging.debug("Method: ["+method+"]")
 
     for line in fileDscrpt:  #we parse line by line
         if method == "semicolonlist":
@@ -60,7 +81,7 @@ def analyzeFile(fileDscrpt, srckey, weight):
             if lines < 1000: #we don't really care about counting lines if we are over 1000, this is only used to detect if this is a list or not, and only on first lines
                 lines += 1
             if lines > matches + 20:   #number of missed matches to consider the file invalid
-                print("Too many lines are not matching, stopping !")
+                logging.debug("Too many lines are not matching, stopping !")
                 return []
                 break
 
@@ -82,8 +103,8 @@ def analyzeFile(fileDscrpt, srckey, weight):
             #for each identified modes, we store them in the struct
             for mode in hashType:
                 if mode.hashcat is not None: #we only keep hashes hashcat can break, it should also filter out obscure hashes that got matched by a hash regex (by hashid)
-                    #print(mode.name)
-                    #print(mode.hashcat)
+                    #logging.debug(mode.name)
+                    #logging.debug(mode.hashcat)
                     hashSummary["possibleHashTypes"].append(mode.hashcat)
                     hashSummary["possibleHashTypesNames"].append(mode.name)
                     hashcatcount+=1
@@ -91,65 +112,100 @@ def analyzeFile(fileDscrpt, srckey, weight):
             #if there are no match, it must me plain text
             isPassword=False
             if hashcatcount > 0:
-                #print("Testing for false positive")                  #TODO: find a better way because we're going to have a lot of false positive.
+                #logging.debug("Testing for false positive")                  #TODO: find a better way because we're going to have a lot of false positive.
                 results = zxcvbn(item)
                 if results['guesses_log10'] >= 11:
                     hashSummary["value"]=item
-                    sendHash(hashSummary, srckey)
+                    #sendHash(hashSummary, srckey)
+                    returnHashes.append(hashSummary)
                 else:
-                    print("Skipping '"+item+"' because entropy seems to be too low.")
+                    logging.debug("Skipping '"+item+"' because entropy seems to be too low.")
                     isPassword=True
             else:
                 isPassword=True
             if isPassword:
-                registerPassword(item, srckey, weight)
-
-    print("done")
+                localweight=weight
+                if method == "fulllist":
+                    localweight=mapValue(lines, 1, linecount, 1, weight)
+                #registerPassword(item, srckey, localweight)
+                returnPasswords.append((item, localweight))
+    if matches==0:
+        logging.debug("Found nothing in this file.")
+    logging.debug("done")
+    if not returnHashes or not returnPasswords:
+        raise ValueError('Found nothing and both list empty')   
+    else:
+        logging.debug(str(len(returnHashes)))
+        logging.debug(str(len(returnPasswords)))
+    return returnHashes, returnPasswords
 
 #========================================================================
 
 #called fo each item in the queue
-def callback(ch, method, properties, body):
-    global dbactioncount, cursor, mariadb_connection, channel
+def callback(ch, method, properties, body, args):
+    (channel, connection, threads) = args
     params=json.loads(body) #parse the json packet
-    print(" ") #For log clarity
-    print("processing:")
-    print(params["v"])
+    delivery_tag = method.delivery_tag
+    t = threading.Thread(target=processOne, args=(delivery_tag, params, channel, connection))
+    t.start()
+    threads.append(t)
+
+def processOne(delivery_tag, params, channel, connection):
+    
+    mariadb_connection = DB(host='db_dict', port=3306, user=os.environ['MYSQL_USER'], password=os.environ['MYSQL_PASSWORD'], database='crack_it')
+    #QUERY INIT
+    mariadb_connection.connect()
+    
+    logging.debug(" ") #For log clarity
+    logging.debug("processing:")
+    logging.debug(params["v"])
+
+    dbactioncount=[0]
     
     filename=os.path.join(tmpDirectory,params["v"])
-
+    
     #Check if file exist to avoid errors
-    if os.path.isfile(filename) == True :
+    if os.path.isfile(filename):
         #Latin 1 will work for utf-8 but may mangle character if we edit the stream (see the official doc)
-        with open(filename, 'r', encoding="latin-1") as file:
-            print("Processing file : "+filename)
-            analyzeFile(file, params["s"], params["w"])
-        print("LAST COMMIT")
+        linecount=wccount(filename)
+        try:
+            with open(filename, 'r', encoding="latin-1") as file:
+                logging.debug("Processing file : "+filename)
+                hashes, passwords = analyzeFile(file, params["w"], linecount)
+                
+            for item_hash in hashes:
+                dbactioncount[0]+=sendHash(item_hash, params["s"], mariadb_connection)
+                commitIfNecessary(mariadb_connection, dbactioncount)
+            for item_password in passwords:
+                dbactioncount[0]+=registerPassword(*item_password, params["s"], mariadb_connection)
+                commitIfNecessary(mariadb_connection, dbactioncount)
+            logging.debug("LAST COMMIT")
+            mariadb_connection.commit()
+        except ValueError:
+            logging.info("Nothing was found in this file. Discarding it....")
+        finally:
+            logging.debug("Deleting source file")
+            os.remove(filename)
+            logging.debug("ACK-ING the message")
+    else:
+        logging.debug("FILE DOES NOT EXIST...")
         mariadb_connection.commit()
-        print("Deleting source file")
-        os.remove(filename)
-        print("ACK-ING the message")
-        ch.basic_ack(method.delivery_tag)
-    else :
-        print("FILE DOES NOT EXIST...")
-        mariadb_connection.commit()
-        print("ACK-ING the message")
-        ch.basic_ack(method.delivery_tag)
-
+        logging.debug("Discarding (ACK-ING) the message")
+    ack_callback = functools.partial(ack_message, channel, delivery_tag)
+    connection.add_callback_threadsafe(ack_callback)
 #========================================================================
 
-def commitIfNecessary():
-    global dbactioncount, mariadb_connection
-    if dbactioncount >=1000:
-        print("COMMIT")
+def commitIfNecessary(mariadb_connection, dbactioncount):
+    if dbactioncount[0] >=1000:
+        logging.debug("COMMIT")
         mariadb_connection.commit() #send everything pending to the database
-        dbactioncount = 0
+        dbactioncount[0] = 0
+        
 
 #========================================================================
 
-def registerPassword(password, srckey, weight):
-    global dbactioncount, mariadb_connection
-    print("[Saving] Password: "+password)
+def registerPassword(password, weight, srckey, mariadb_connection):
+    logging.debug("[Saving] Password: "+password+" . Weight: "+str(weight))
     sql="INSERT INTO dict (password, seen) VALUES (%s, %s) ON DUPLICATE KEY UPDATE seen = (if((SELECT count(*) FROM (select * from origin_dict INNER JOIN dict ON dict.id = origin_dict.item WHERE origin_dict.srckey = %s AND dict.password = %s) s) > 0, dict.seen, dict.seen+%s));" #insert the password, and if it already exist, increment the "seen" counter only it we didn't get it from the same source
     sql2 = "INSERT INTO origin_dict(srckey, item) VALUES (%s, (select id from dict WHERE password = %s)) ON DUPLICATE KEY UPDATE srckey=srckey;" #remember from which source the entry is from, if this is the first time we see it.
 
@@ -157,27 +213,25 @@ def registerPassword(password, srckey, weight):
         mariadb_connection.query(sql, (password, weight, srckey, password, weight))
         mariadb_connection.query(sql2, (srckey, password))
 
-        dbactioncount+=2
+        
 
     except Exception as err:
-        print("[Saving] [Error] ")
-        print(err)
-
-    commitIfNecessary()
+        logging.debug("[Saving] [Error] ")
+        logging.debug(str(err))
+    
+    return 2 #two queries
 
 #========================================================================
 
-def sendHash(ihash, srckey):
-    global dbactioncount, mariadb_connection
+def sendHash(ihash, srckey, mariadb_connection):
     insert_bdd_hash = "INSERT INTO hash (str, algo, clear) VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE str=str;"
     insert_origin = "INSERT INTO origin_hash(srckey, item) VALUES (%s, (select id from hash WHERE str = %s)) ON DUPLICATE KEY UPDATE srckey=srckey;" 
 
-    print("[Saving] Hash: "+ihash["value"])
+    logging.debug("[Saving] Hash: "+ihash["value"])
     mariadb_connection.query(insert_bdd_hash, (ihash["value"], json.dumps(ihash["possibleHashTypes"]), None))
 
     mariadb_connection.query(insert_origin, (srckey, ihash["value"]))
-    dbactioncount+=2
-    commitIfNecessary()
+    return 2 #two queries
 
     
 #========================================================================
@@ -185,14 +239,7 @@ def sendHash(ihash, srckey):
 ########################################## END FUNCTONS #######################################
 
 def main():
-    global mariadb_connection, dbactioncount, channel
-    #========================================================================
-    #Connecting to mariadb
-    mariadb_connection = DB(host='db_dict', port=3306, user=os.environ['MYSQL_USER'], password=os.environ['MYSQL_PASSWORD'], database='crack_it')
-    #QUERY INIT
-    mariadb_connection.connect()
-
-    #========================================================================
+    threads = []
     #Connecting to RabbitMQ
     success=False
     while not success:
@@ -203,7 +250,7 @@ def main():
             success=True
         except (pika.exceptions.AMQPConnectionError) as e:
             success=False
-            print("Failed to connect to rabbitMQ ... Retrying in 5 seconds.")
+            logging.debug("Failed to connect to rabbitMQ ... Retrying in 5 seconds.")
             time.sleep(5)
 
 
@@ -220,17 +267,23 @@ def main():
     #bind the queue to the url exchange
     channel.queue_bind(exchange='files', queue=queue_name)
 
-
-    #Global variables used in multiple functions - DO NOT TOUCH
-    #Count actions on db before commiting
-    dbactioncount=0
-
     ######################################### START #########################################
+    logging.debug("Setting up callback.")
+    
+    on_message_callback = functools.partial(callback, args=(channel, connection, threads))
+    channel.basic_consume(queue_name, on_message_callback, auto_ack=False) #registering processing function
 
-    channel.basic_consume(queue_name, callback, auto_ack=False) #registering processing function
+    try:
+        channel.start_consuming()
+    except (KeyboardInterrupt, SystemExit):
+        logging.info("Shutting down.")
+    finally:
+        channel.stop_consuming()
+        # Wait for all to complete
+        for thread in threads:
+            thread.join()
 
-    channel.start_consuming() #start processing messages in the url queue
-
+        connection.close()
 
     #========================================================================
 

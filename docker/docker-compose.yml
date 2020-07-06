@@ -39,12 +39,6 @@ services:
         networks: 
             - "messages"
             - "database"
-        deploy:
-            mode: replicated #use global to only have one instance per node
-            replicas: 3
-            placement:
-                constraints:
-                  - "node.role==worker"
         volumes: 
             - "sharedTmpFileQueue:/sharedTmp"
             - "./commons/python-mysqldb-reconnect/mysqldb.py:/code/mysqldb.py:ro"
@@ -53,6 +47,8 @@ services:
             - rabbitmq
         env_file:
             - ./back.env
+        environment:
+            "PYTHONUNBUFFERED": "1"
         build:
             context: parser
             dockerfile: dockerfile
@@ -110,6 +106,18 @@ services:
         restart: 
             always
 
+    #Temporary
+    phpmyadmin:
+        image: phpmyadmin/phpmyadmin
+        networks: 
+            - "database"
+        environment:
+          PMA_HOST: db_dict
+          PMA_PORT: 3306
+        restart: always
+        ports:
+            - 8080:80
+
     rabbitmq:
         image: "rabbitmq"
         networks: 
@@ -119,16 +127,13 @@ services:
 
     nginx:
         image: "nginx"
-        build:
-            context: nginx
-            dockerfile: dockerfile
         ports:
             - "80:80"
             - "443:443"
         volumes:
             - "./volumes/web:/var/www/html"
             - "./nginx:/etc/nginx/conf.d" #Exception ! Allow us to avoid another dockerfile
-            - "./certs:/etc/nginx/certs:ro"
+            - "./nginx/certs:/etc/nginx/certs:ro"
         depends_on:
             - statsserver
         networks: 
@@ -150,7 +155,7 @@ services:
             dockerfile: dockerfile
         volumes: 
             - "./volumes/dict:/dict"
-      
+
 networks:
     messages:
     database:

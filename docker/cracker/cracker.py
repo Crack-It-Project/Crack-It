@@ -13,6 +13,9 @@ from os import path
 import pika
 import time
 import subprocess
+import threading
+
+#from pathlib import Path
 
 db = DB(host='db_dict', port=3306, user=os.environ['MYSQL_USER'], password=os.environ['MYSQL_PASSWORD'], database='crack_it')
 db.connect()
@@ -41,6 +44,7 @@ channel.queue_bind(exchange='hashes', queue=queue_name2)
 
 def callback(ch, method, properties, body):
 	# Prepare requests
+	print("------------------------------Start------------------------------")
 	check_bdd = "SELECT str FROM hash WHERE str = %s AND clear IS NOT NULL"
 	update_bdd_hash = "UPDATE hash SET clear = %s WHERE str = %s"
 	insert_bdd_clear = "INSERT INTO dict (password) VALUES (%s) ON DUPLICATE KEY UPDATE seen=seen+1" # Modifier requête pour checker si même repo ne pas incrémenter seen (cf. parser)
@@ -66,6 +70,8 @@ def callback(ch, method, properties, body):
 
 	hash_presence_in_bdd = True
 
+	hashId=db.query(get_hash_ID, (hash,)).fetchall()[0][0]
+
 	os.system("touch cracked.txt")
 
 	if result == None:
@@ -80,63 +86,70 @@ def callback(ch, method, properties, body):
 
 		# Get Hash types (numbers) for hash types in hashcat
 		for hashTypesNumber in rabbitMQ_data_array['possibleHashTypes']:
+			print("------------------------------NewTry------------------------------")
 			hashType = str(hashTypesNumber)
 
 			# hashs cracking
-			try:
-				crack = subprocess.check_output(["hashcat","-a","0", "--show", "-m", hashType, "-o", "cracked.txt", "--force", hash, "dict/dict.txt"], stderr=subprocess.STDOUT, shell=False)
-				if crack is not '':
-					print("=======")
-					print(crack)
-					print("=======")
-			except subprocess.CalledProcessError as e:
-				error=e.output.decode()
-				
-				if "Hash-value exception" in error or "Separator unmatched" in error:
-					notAHash+=1			
-				else:
-					print("Unexpected error : "+error)
-				print("Hashcat failed.")
-				
-
-
-			# Success
-			if (os.stat("cracked.txt").st_size != 0):
-				print("------------------------------Success------------------------------")
-				success_token = True
-				cracked = open("cracked.txt", "r")
-				password_data = cracked.readline().split(":")
-				password_clear = password_data[1]
-				cracked.close()
-
-				# Clear password db insert
-				val_clear = (password_clear)
-				cursor = db.query(insert_bdd_clear, (val_clear,))
-				db.commit()
-				print("Dictionnary has been updated ...")
-
-				# Hash password db insert
-				val_hash = [hash, hashType, val_clear]		# Link foreign key for clear password
-				cursor = db.query(insert_bdd_hash, val_hash)
-				db.commit() #must commit to get the inserted id
-				cursor = db.query(update_bdd_hash, (cursor.lastrowid,val_hash))
-				db.commit()
-				print(cursor.rowcount, "Hashed password was inserted")
-				
-				# Erase cracked.txt file
-				os.system("rm cracked.txt")
-				# Create a new one
-				os.system("touch cracked.txt")
-				pass
-
-			# Fail
-			else:
-				pass
 			
+			print(hash,  file=open('hash.txt', 'w'))
+			print(str(path.exists("hash.txt")))
+				
+			#crack = subprocess.check_output(["hashcat","-a","0", "--show", "-m", hashType, "-o", "cracked.txt", "--force", hash, "dict/dict.txt"], stderr=subprocess.STDOUT, shell=False)
+			print("Hashtype: "+str(hashType))
+			"""
+			try:
+				#hashcat_proc= subprocess.Popen("hate_crack/hate_crack.py hash.txt "+str(hashType), encoding="latin1", input="2\n".encode(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
+				while hashcat_proc.poll() is None:
+					try:
+						for line in hashcat_proc.stdout:
+							if "Hash-value exception" in line or "Separator unmatched" in line:
+								notAHash+=1		
+								print("[hate_crack] [ERROR] "+line)
+							print("[hate_crack] "+line)
+					except (BrokenPipeError, IOError):
+						print ('Caught InnerBrokenPipeError')
+			except (BrokenPipeError, IOError):
+				print ('Caught OuterBrokenPipeError')"""
+			try:
+				crack = subprocess.check_output(["hate_crack/hate_crack.py", "hash.txt", str(hashType)], input="2\n".encode(), stderr=subprocess.STDOUT, shell=False)	
+				for line in crack:
+					if "Hash-value exception" in line or "Separator unmatched" in line:
+						notAHash+=1		
+						print("[hate_crack] [ERROR] "+line)
+					print("[hate_crack] "+line)
+			except subprocess.CalledProcessError as e:
+				print("Hashcat failed: ")
+				print(e.output)
+			# Success
+			if path.isfile("hash.txt.out"):
+				if (path.getsize("hash.txt.out") > 0):
+					print("------------------------------Success------------------------------")
+					success_token = True
+					cracked = open("hash.txt.out", "r")
+					password_data = cracked.readline().split(":")
+					password_clear = password_data[1]
+					cracked.close()
+
+					# Clear password db insert
+					cursor = db.query(insert_bdd_clear, (password_clear,))
+					db.commit()
+					print("Dictionnary has been updated ... Added: "+password_clear)
+
+					cursor = db.query(update_bdd_hash, (cursor.lastrowid,hash))
+					db.commit()
+					print(cursor.rowcount, "Linked hash to dict value.")
+					
+					# Erase cracked.txt file
+					#os.remove("hash.txt.out")
+					# Create a new one
+					#os.system("touch cracked.txt")
+					#Path('cracked.txt').touch()
+				os.remove("hash.txt.out")
+			os.remove("hash.txt")
 
 	if notAHash == len(rabbitMQ_data_array['possibleHashTypes']):
 		print("Not a hash ! this is probably a password ! Saving in DB.")
-		hashId=db.query(get_hash_ID, (hash,)).fetchall()[0][0]
+		
 		print("Old Hash ID: "+str(hashId))
 		cursor = db.query(get_origin_hash_seen, (hashId,))
 		count=cursor.fetchall()[0][0]
@@ -165,7 +178,7 @@ def callback(ch, method, properties, body):
 		#mariadb_connection.commit()
 		print("Hash not decrypted")
 	ch.basic_ack(method.delivery_tag)
-
+	print("------------------------------End------------------------------")
 
 channel.basic_consume(queue_name2, callback, auto_ack=False) #registering processing function
 

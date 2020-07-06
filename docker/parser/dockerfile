@@ -6,8 +6,8 @@ FROM python:3
 
 WORKDIR /code
 
-COPY . .
-
+COPY requirements.txt ./
 RUN pip install -r requirements.txt
 
-CMD ["python","parser.py"]
+COPY parser.py ./
+CMD ["python","-u","parser.py"]

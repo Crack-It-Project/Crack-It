@@ -90,7 +90,7 @@ rm -rf /tmp/crack_it
 #       Use "docker start" to execute an already ran container
 (crontab -l 2> /dev/null ; echo "0 0-23 * * * /usr/bin/docker start crack_it_crawler_1" ) | crontab
 (crontab -l 2> /dev/null ; echo "0 0,6,12,18 * * * /usr/bin/docker start crack_it_compiler_1" ) | crontab
-(crontab -l 2> /dev/null ; echo "0 0 * * * /usr/bin/docker start crack_it_hashfetcher_1" ) | crontab
+(crontab -l 2> /dev/null ; echo "0 0 * * * /usr/bin/docker start crack_it_fetcher_1" ) | crontab
 
 #Launch project
 cd /crack_it/

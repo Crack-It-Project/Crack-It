@@ -1,9 +1,0 @@
-#Dockerfile of the crackit nginx server
-#Based on Nginx
-#
-
-FROM nginx
-
-RUN apt-get update -y && apt-get install -y certbot python-certbot-nginx
-
-RUN certbot --nginx --non-interactive --agree-tos --domains crack-it-project.tk -m admin@crack-it-project.tk
