@@ -1,13 +1,14 @@
 -- phpMyAdmin SQL Dump
--- version 4.6.6deb5
+-- version 5.0.2
 -- https://www.phpmyadmin.net/
 --
--- Client :  localhost:3306
--- Généré le :  Lun 04 Mai 2020 à 16:43
--- Version du serveur :  10.3.22-MariaDB-0+deb10u1
--- Version de PHP :  7.3.14-1~deb10u1
+-- Host: db_dict:3306
+-- Generation Time: Jul 03, 2020 at 09:04 AM
+-- Server version: 10.4.13-MariaDB-1:10.4.13+maria~focal
+-- PHP Version: 7.4.6
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+START TRANSACTION;
 SET time_zone = "+00:00";
 
 
@@ -17,38 +18,39 @@ SET time_zone = "+00:00";
 /*!40101 SET NAMES utf8mb4 */;
 
 --
--- Base de données :  `crack_it`
+-- Database: `crack_it`
 --
 
 -- --------------------------------------------------------
 
 --
--- Structure de la table `dict`
+-- Table structure for table `dict`
 --
 
 CREATE TABLE `dict` (
   `id` bigint(20) UNSIGNED NOT NULL,
   `password` varchar(535) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,
   `seen` int(11) NOT NULL DEFAULT 1,
-  `date` date DEFAULT CURRENT_TIMESTAMP
+  `date` date DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- --------------------------------------------------------
 
 --
--- Structure de la table `hash`
+-- Table structure for table `hash`
 --
 
 CREATE TABLE `hash` (
+  `id` bigint(20) UNSIGNED NOT NULL,
   `str` varchar(255) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,
   `algo` varchar(255) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,
-  `clear` varchar(535) CHARACTER SET utf8 COLLATE utf8_unicode_ci DEFAULT NULL
+  `clear` bigint(20) UNSIGNED DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- --------------------------------------------------------
 
 --
--- Structure de la table `origin_dict`
+-- Table structure for table `origin_dict`
 --
 
 CREATE TABLE `origin_dict` (
@@ -57,8 +59,6 @@ CREATE TABLE `origin_dict` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Store from where an entry in dict has been pulled from';
 
 -- --------------------------------------------------------
-
-
 
 --
 -- Table structure for table `origin_hash`
@@ -69,32 +69,10 @@ CREATE TABLE `origin_hash` (
   `item` bigint(20) UNSIGNED NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
---
--- Indexes for dumped tables
---
-
---
--- Indexes for table `origin_hash`
---
-ALTER TABLE `origin_hash`
-  ADD PRIMARY KEY (`srckey`),
-  ADD KEY `origin_hash_hashId` (`item`);
-
---
--- Constraints for dumped tables
---
-
---
--- Constraints for table `origin_hash`
---
-ALTER TABLE `origin_hash`
-  ADD CONSTRAINT `origin_hash_hashId` FOREIGN KEY (`item`) REFERENCES `hash` (`id`);
-COMMIT;
-
 -- --------------------------------------------------------
 
 --
--- Structure de la table `source`
+-- Table structure for table `source`
 --
 
 CREATE TABLE `source` (
@@ -107,20 +85,20 @@ CREATE TABLE `source` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 --
--- Contenu de la table `source`
+-- Dumping data for table `source`
 --
 
 INSERT INTO `source` (`idsource`, `url`, `module`, `name`, `sourceHint`, `weight`) VALUES
-(1, 'https://github.com/danielmiessler/SecLists.git', 'git', NULL, NULL, 10),
-(2, 'https://scrape.pastebin.com/api_scraping.php?lang=email', 'pastebin', NULL, NULL, 1),
-(3, 'https://scrape.pastebin.com/api_scraping.php?lang=bash', 'pastebin', NULL, NULL, 1);
+(1, 'https://github.com/JL-intech/rockyou.git', 'git', NULL, NULL, 100),
+(2, 'https://scrape.pastebin.com/api_scraping.php?lang=email', 'pastebin', NULL, '1593704504', 1),
+(3, 'https://scrape.pastebin.com/api_scraping.php?lang=bash', 'pastebin', NULL, '1593766181', 1);
 
 --
--- Index pour les tables exportées
+-- Indexes for dumped tables
 --
 
 --
--- Index pour la table `dict`
+-- Indexes for table `dict`
 --
 ALTER TABLE `dict`
   ADD PRIMARY KEY (`password`),
@@ -128,14 +106,15 @@ ALTER TABLE `dict`
   ADD UNIQUE KEY `id` (`id`);
 
 --
--- Index pour la table `hash`
+-- Indexes for table `hash`
 --
 ALTER TABLE `hash`
   ADD PRIMARY KEY (`str`),
+  ADD UNIQUE KEY `id` (`id`),
   ADD KEY `clear` (`clear`);
 
 --
--- Index pour la table `origin_dict`
+-- Indexes for table `origin_dict`
 --
 ALTER TABLE `origin_dict`
   ADD PRIMARY KEY (`srckey`,`item`),
@@ -143,40 +122,62 @@ ALTER TABLE `origin_dict`
   ADD KEY `srckey` (`srckey`);
 
 --
--- Index pour la table `source`
+-- Indexes for table `origin_hash`
+--
+ALTER TABLE `origin_hash`
+  ADD PRIMARY KEY (`srckey`),
+  ADD KEY `origin_hash_hashId` (`item`);
+
+--
+-- Indexes for table `source`
 --
 ALTER TABLE `source`
   ADD PRIMARY KEY (`idsource`);
 
 --
--- AUTO_INCREMENT pour les tables exportées
+-- AUTO_INCREMENT for dumped tables
 --
 
 --
--- AUTO_INCREMENT pour la table `dict`
+-- AUTO_INCREMENT for table `dict`
 --
 ALTER TABLE `dict`
   MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
 --
--- AUTO_INCREMENT pour la table `source`
+-- AUTO_INCREMENT for table `hash`
+--
+ALTER TABLE `hash`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `source`
 --
 ALTER TABLE `source`
   MODIFY `idsource` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+
 --
--- Contraintes pour les tables exportées
+-- Constraints for dumped tables
 --
 
 --
--- Contraintes pour la table `hash`
+-- Constraints for table `hash`
 --
 ALTER TABLE `hash`
-  ADD CONSTRAINT `hash_ibfk_1` FOREIGN KEY (`clear`) REFERENCES `dict` (`password`);
+  ADD CONSTRAINT `hash_ibfk_1` FOREIGN KEY (`clear`) REFERENCES `dict` (`id`);
 
 --
--- Contraintes pour la table `origin_dict`
+-- Constraints for table `origin_dict`
 --
 ALTER TABLE `origin_dict`
   ADD CONSTRAINT `orgin_dict-dict_FK` FOREIGN KEY (`item`) REFERENCES `dict` (`id`);
+
+--
+-- Constraints for table `origin_hash`
+--
+ALTER TABLE `origin_hash`
+  ADD CONSTRAINT `origin_hash_hashId` FOREIGN KEY (`item`) REFERENCES `hash` (`id`);
+COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;

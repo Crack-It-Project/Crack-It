@@ -48,7 +48,7 @@ services:
         env_file:
             - ./back.env
         environment:
-            "PYTHONUNBUFFERED": "1"
+            "PYTHONUNBUFFERED": "0"
         build:
             context: parser
             dockerfile: dockerfile
@@ -65,6 +65,8 @@ services:
             - rabbitmq
         env_file:
             - ./back.env
+        environment:
+            "PYTHONUNBUFFERED": "0"
         volumes:
             - "./volumes/dict:/dict"
             - "./commons/python-mysqldb-reconnect/mysqldb.py:/code/mysqldb.py:ro"
@@ -126,14 +128,16 @@ services:
             always
 
     nginx:
-        image: "nginx"
+        image: staticfloat/nginx-certbot
         ports:
-            - "80:80"
-            - "443:443"
+            - 80:80/tcp
+            - 443:443/tcp
+        environment:
+            CERTBOT_EMAIL: webmaster@crack-it-project.tk #address is wrong.. I messed up
         volumes:
+            - "letsencrypt:/etc/letsencrypt"
             - "./volumes/web:/var/www/html"
-            - "./nginx:/etc/nginx/conf.d" #Exception ! Allow us to avoid another dockerfile
-            - "./nginx/certs:/etc/nginx/certs:ro"
+            - "./nginx:/etc/nginx/user.conf.d:ro"
         depends_on:
             - statsserver
         networks: 
@@ -164,5 +168,6 @@ networks:
 volumes:
     sharedTmpFileQueue:
     sourceFileCache:
+    letsencrypt:
 #    db_dict:
 #    dict:

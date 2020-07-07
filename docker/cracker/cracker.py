@@ -14,11 +14,9 @@ import pika
 import time
 import subprocess
 import threading
+import functools
 
 #from pathlib import Path
-
-db = DB(host='db_dict', port=3306, user=os.environ['MYSQL_USER'], password=os.environ['MYSQL_PASSWORD'], database='crack_it')
-db.connect()
 
 success=False
 while not success:
@@ -42,7 +40,25 @@ result2 = channel.queue_declare(queue=queue_name2, exclusive=False, auto_delete=
 #bind the queue to the url exchange
 channel.queue_bind(exchange='hashes', queue=queue_name2)
 
-def callback(ch, method, properties, body):
+def ack_message(channel, delivery_tag):
+    if channel.is_open:
+        channel.basic_ack(delivery_tag)
+    else:
+        pass
+
+def callback(ch, method, properties, body, args):
+    (channel, connection, threads) = args
+    params=json.loads(body) #parse the json packet
+    delivery_tag = method.delivery_tag
+    t = threading.Thread(target=processOne, args=(delivery_tag, params, channel, connection))
+    t.start()
+    threads.append(t)
+
+def processOne(delivery_tag, rabbitMQ_data_array, channel, connection):
+
+	db = DB(host='db_dict', port=3306, user=os.environ['MYSQL_USER'], password=os.environ['MYSQL_PASSWORD'], database='crack_it')
+	db.connect()
+
 	# Prepare requests
 	print("------------------------------Start------------------------------")
 	check_bdd = "SELECT str FROM hash WHERE str = %s AND clear IS NOT NULL"
@@ -54,13 +70,6 @@ def callback(ch, method, properties, body):
 	delete_old_origin_data = "DELETE FROM origin_hash WHERE item = %s"
 	delete_old_hash = "DELETE FROM hash WHERE id = %s"
 	get_hash_ID = "SELECT id FROM hash WHERE str = %s"
-
-
-	# Get Hashs
-	rabbitMQ_data = body
-
-	# Parse JSON into array
-	rabbitMQ_data_array = json.loads(rabbitMQ_data)
 
 	# Does the hash exist in db ?
 	hash = rabbitMQ_data_array['value']
@@ -179,9 +188,22 @@ def callback(ch, method, properties, body):
 		print("Hash not decrypted")
 	ch.basic_ack(method.delivery_tag)
 	print("------------------------------End------------------------------")
+	ack_callback = functools.partial(ack_message, channel, delivery_tag)
+	connection.add_callback_threadsafe(ack_callback)
 
-channel.basic_consume(queue_name2, callback, auto_ack=False) #registering processing function
+threads=[]
 
-channel.start_consuming() #start processing messages in the url queue
+on_message_callback = functools.partial(callback, args=(channel, connection, threads))
+channel.basic_consume(queue_name2, on_message_callback, auto_ack=False) #registering processing function
 
-connection.close()
+try:
+    channel.start_consuming()
+except (KeyboardInterrupt, SystemExit):
+    print("Shutting down.")
+finally:
+    channel.stop_consuming()
+    # Wait for all to complete
+    for thread in threads:
+        thread.join()
+
+    connection.close()
