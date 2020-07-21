@@ -6,7 +6,7 @@ The aim of the project is to offer a password reliability testing solution based
 The project was initiated by Jonathan Durant, lecturer and speaker on cybersecurity.
 
 Original contributors:
-*  [Frédéric](url)
+*  [Frédéric](https://github.com/BigLabs1523)
 *  [Matthieu](https://github.com/MF-intech-sud)
 *  [Jérémy](https://github.com/JL-intech)
 *  [Hugo](https://github.com/h-marti)
